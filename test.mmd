@@ -2,10 +2,23 @@ classDiagram
 
 class MainActivity
 
-class City
+class Notification
 
-class CityArrayAdapter
+class NotificationAdapter
 
-MainActivity --> City
-MainActivity --> CityArrayAdapter
-CityArrayAdapter --> City
+class NotificationAdapter_NotificationViewHolder
+
+class NotificationAdapter_SeparatorViewHolder
+
+class NotificationAdapter_EmptyViewHolder
+
+class NotificationRepository
+
+class QRGenerator
+
+NotificationAdapter --> Notification
+NotificationAdapter --> NotificationAdapter_NotificationViewHolder
+NotificationAdapter --> NotificationAdapter_SeparatorViewHolder
+NotificationAdapter --> NotificationAdapter_EmptyViewHolder
+NotificationRepository --> Notification
+MainActivity --> NotificationRepository
