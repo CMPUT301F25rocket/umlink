@@ -61,9 +61,20 @@ fn serialize_class(class: &Class) -> String {
                     if i > 0 {
                         output.push_str(", ");
                     }
-                    write!(output, "{}", param.name).unwrap();
+
+                    // Only include parameter name if it's not a generic argN name
+                    let is_generic_name = param.name.starts_with("arg") &&
+                        param.name[3..].chars().all(|c| c.is_numeric());
+
+                    if !is_generic_name {
+                        write!(output, "{}", param.name).unwrap();
+                        if param.data_type.is_some() {
+                            output.push_str(": ");
+                        }
+                    }
+
                     if let Some(data_type) = &param.data_type {
-                        write!(output, ": {}", escape_generics(data_type)).unwrap();
+                        write!(output, "{}", escape_generics(data_type)).unwrap();
                     }
                 }
                 output.push(')');
