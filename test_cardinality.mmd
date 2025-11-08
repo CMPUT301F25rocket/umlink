@@ -1,0 +1,12 @@
+classDiagram
+
+class Customer
+class Ticket
+class Student
+class Course
+class Galaxy
+class Star
+
+Customer "1" <-- "*" Ticket
+Student "1" --> "1..*" Course
+Galaxy --> "many" Star : Contains

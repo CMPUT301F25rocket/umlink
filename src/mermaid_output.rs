@@ -102,10 +102,18 @@ fn serialize_class(class: &Class) -> String {
 /// Serialize a relation to Mermaid format
 /// The parser stores from/to such that the arrow always points from->to
 /// So we always use right-pointing arrow syntax
+/// Format: [classA] "cardinality1" [Arrow] "cardinality2" [ClassB] : LabelText
 fn serialize_relation(relation: &Relation) -> String {
     let mut output = String::new();
 
-    write!(output, "{} ", relation.from).unwrap();
+    write!(output, "{}", relation.from).unwrap();
+
+    // Add cardinality_from if present
+    if let Some(card) = &relation.cardinality_from {
+        write!(output, " \"{}\"", card).unwrap();
+    }
+
+    output.push(' ');
 
     // Build the relation symbol (always right-pointing since parser normalizes)
     match (relation.kind, relation.line) {
@@ -120,10 +128,15 @@ fn serialize_relation(relation: &Relation) -> String {
         (RelationKind::Lollipop, _) => output.push_str("--o"),
     }
 
+    // Add cardinality_to if present
+    if let Some(card) = &relation.cardinality_to {
+        write!(output, " \"{}\"", card).unwrap();
+    }
+
     write!(output, " {}", relation.to).unwrap();
 
-    // Labels
-    if let Some(label) = &relation.label_to {
+    // Add label if present
+    if let Some(label) = &relation.label {
         write!(output, " : {}", label).unwrap();
     }
 
