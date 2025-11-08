@@ -11,7 +11,7 @@ use std::{
     fs,
     path::{Path, PathBuf},
 };
-use classfile_utils::classfile_to_mermaid_class;
+use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
 use mermaid_output::serialize_diagram;
 
 /// This program will take in a list of mermaid files which need "linking"
@@ -157,6 +157,74 @@ fn collect_referenced_classes(diagram: &Diagram) -> HashSet<String> {
     referenced
 }
 
+/// Find the common base package among all classes
+/// Returns the common prefix package path (e.g., "com/example")
+fn find_common_base_package(packages: &[&str]) -> String {
+    if packages.is_empty() {
+        return String::new();
+    }
+
+    // Split all packages into components
+    let split_packages: Vec<Vec<&str>> = packages
+        .iter()
+        .map(|p| p.split('/').collect())
+        .collect();
+
+    if split_packages.is_empty() {
+        return String::new();
+    }
+
+    // Find common prefix
+    let mut common = Vec::new();
+    let first = &split_packages[0];
+
+    for (i, component) in first.iter().enumerate() {
+        if split_packages.iter().all(|p| p.get(i) == Some(component)) {
+            common.push(*component);
+        } else {
+            break;
+        }
+    }
+
+    common.join("/")
+}
+
+/// Convert a full package name to a relative namespace
+/// e.g., base="com/example", full="com/example/subpackage" -> "subpackage"
+fn get_relative_namespace(base: &str, full: &str) -> String {
+    if base.is_empty() {
+        return full.replace('/', ".");
+    }
+
+    if full == base {
+        return mermaid_parser::types::DEFAULT_NAMESPACE.to_string();
+    }
+
+    if full.starts_with(base) {
+        let relative = &full[base.len()..];
+        let relative = relative.trim_start_matches('/');
+        if relative.is_empty() {
+            mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
+        } else {
+            relative.replace('/', ".")
+        }
+    } else {
+        full.replace('/', ".")
+    }
+}
+
+/// Check if groupPackage is enabled in the YAML frontmatter
+fn should_group_by_package(diagram: &Diagram) -> bool {
+    if let Some(yaml) = &diagram.yaml {
+        if let Some(umlink) = yaml.get("umlink") {
+            if let Some(group_package) = umlink.get("groupPackage") {
+                return group_package.as_bool().unwrap_or(false);
+            }
+        }
+    }
+    false
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -195,22 +263,62 @@ fn main() {
         // Collect all class names that need to be in the diagram
         let referenced_classes = collect_referenced_classes(&diagram);
 
+        // Clear existing classes from namespaces (keep only relations and YAML)
+        // We'll repopulate with full class details from classfiles
+        diagram.namespaces.clear();
+
+        // Determine if we should group by package
+        let group_by_package = should_group_by_package(&diagram);
+
+        // If grouping by package, find the common base package
+        let base_package = if group_by_package {
+            let full_names: Vec<String> = referenced_classes
+                .iter()
+                .filter_map(|class_name| classfiles.get(class_name))
+                .filter_map(|classfile| get_full_class_name(classfile))
+                .collect();
+
+            let packages: Vec<&str> = full_names
+                .iter()
+                .map(|full_name| get_package_name(full_name))
+                .filter(|pkg| !pkg.is_empty())
+                .collect();
+
+            find_common_base_package(&packages)
+        } else {
+            String::new()
+        };
+
         // For each referenced class, populate it from the classfile if available
         for class_name in referenced_classes {
             // Try to find the corresponding classfile
             if let Some(classfile) = classfiles.get(&class_name) {
                 // Convert classfile to Mermaid class
-                let mermaid_class = classfile_to_mermaid_class(
+                let mut mermaid_class = classfile_to_mermaid_class(
                     classfile,
                     &class_name,
                     skip_annotation,
                 );
 
-                // Replace or add the class in the diagram
-                // For simplicity, we'll work with the default namespace
+                // Determine the namespace for this class
+                let namespace_name = if group_by_package {
+                    if let Some(full_class_name) = get_full_class_name(classfile) {
+                        let package = get_package_name(&full_class_name);
+                        get_relative_namespace(&base_package, package)
+                    } else {
+                        mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
+                    }
+                } else {
+                    mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
+                };
+
+                // Update the class's namespace field
+                mermaid_class.namespace = namespace_name.clone();
+
+                // Add the class to the appropriate namespace
                 let namespace = diagram
                     .namespaces
-                    .entry(mermaid_parser::types::DEFAULT_NAMESPACE.to_string())
+                    .entry(namespace_name)
                     .or_default();
 
                 namespace.classes.insert(class_name.clone(), mermaid_class);

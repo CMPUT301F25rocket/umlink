@@ -144,12 +144,34 @@ pub fn serialize_diagram(diagram: &Diagram) -> String {
 
     output.push_str("classDiagram\n");
 
-    // Serialize all classes from all namespaces
-    for (_namespace_name, namespace) in &diagram.namespaces {
-        for (_class_name, class) in &namespace.classes {
-            output.push('\n');
+    // Separate default namespace from named namespaces
+    let mut default_classes = Vec::new();
+    let mut namespaced_classes: Vec<(&String, &mermaid_parser::types::Namespace)> = Vec::new();
+
+    for (namespace_name, namespace) in &diagram.namespaces {
+        if namespace_name == mermaid_parser::types::DEFAULT_NAMESPACE || namespace_name.is_empty() {
+            for class in namespace.classes.values() {
+                default_classes.push(class);
+            }
+        } else {
+            namespaced_classes.push((namespace_name, namespace));
+        }
+    }
+
+    // Serialize default namespace classes (no wrapper)
+    for class in default_classes {
+        output.push('\n');
+        output.push_str(&serialize_class(class));
+    }
+
+    // Serialize named namespaces
+    for (namespace_name, namespace) in namespaced_classes {
+        output.push('\n');
+        writeln!(output, "namespace {} {{", namespace_name).unwrap();
+        for class in namespace.classes.values() {
             output.push_str(&serialize_class(class));
         }
+        output.push_str("}\n");
     }
 
     // Serialize relations

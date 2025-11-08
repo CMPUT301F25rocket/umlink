@@ -21,6 +21,29 @@ pub fn get_utf8(constant_pool: &[ConstantPool], index: u16) -> Option<&str> {
     }
 }
 
+/// Get the fully qualified class name from the classfile
+/// Returns the name in Java format (e.g., "com/example/MyClass")
+pub fn get_full_class_name(class_file: &ClassFile) -> Option<String> {
+    let constant_pool = class_file.constant_pool();
+    let this_class_index = class_file.this_class();
+
+    if let Some(ConstantPool::Class { name_index }) = constant_pool.get(this_class_index as usize) {
+        get_utf8(constant_pool, *name_index).map(|s| s.to_string())
+    } else {
+        None
+    }
+}
+
+/// Extract package name from a fully qualified class name
+/// e.g., "com/example/MyClass" -> "com/example"
+pub fn get_package_name(full_class_name: &str) -> &str {
+    if let Some(last_slash) = full_class_name.rfind('/') {
+        &full_class_name[..last_slash]
+    } else {
+        "" // Default package
+    }
+}
+
 /// Convert field flags to Mermaid visibility
 pub fn field_visibility(flags: &FieldFlags) -> Visibility {
     if flags.contains(FieldFlags::ACC_PUBLIC) {
