@@ -79,7 +79,8 @@ fn parse_type_internal(descriptor: &str, start: usize) -> (String, usize) {
             let end = descriptor[idx..].find(';').unwrap_or(descriptor.len() - idx);
             let class_path = &descriptor[idx + 1..idx + end];
             let simple_name = class_path.rsplit('/').next().unwrap_or(class_path);
-            (simple_name.to_string(), end + 1)
+            // Replace $ with _ for inner classes (Mermaid treats $ as special)
+            (simple_name.replace('$', "_"), end + 1)
         }
         _ => ("Object".to_string(), 1),
     };
