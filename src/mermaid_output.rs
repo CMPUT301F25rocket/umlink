@@ -133,7 +133,16 @@ fn serialize_relation(relation: &Relation) -> String {
 
 /// Serialize entire diagram to Mermaid text format
 pub fn serialize_diagram(diagram: &Diagram) -> String {
-    let mut output = String::from("classDiagram\n");
+    let mut output = String::new();
+
+    // Serialize YAML frontmatter if present
+    if let Some(yaml) = &diagram.yaml {
+        output.push_str("---\n");
+        output.push_str(&serde_yml::to_string(yaml).unwrap_or_default());
+        output.push_str("---\n\n");
+    }
+
+    output.push_str("classDiagram\n");
 
     // Serialize all classes from all namespaces
     for (_namespace_name, namespace) in &diagram.namespaces {

@@ -296,10 +296,12 @@ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
 [[package]]
 name = "mermaid-parser"
 version = "0.1.0"
-source = "git+https://github.com/GenericConfluent/mermaid-parser.git#020ab986864c08c91ff70ebac746d638ce8a1715"
+source = "git+https://github.com/GenericConfluent/mermaid-parser.git#bc1b5bcd09dd729ae621242e942fd9d70e8007fb"
 dependencies = [
  "pest",
  "pest_derive",
+ "serde",
+ "serde_yml",
  "thiserror",
 ]
 
