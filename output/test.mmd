@@ -1,0 +1,28 @@
+classDiagram
+
+class MainActivity {
+-dataList: ArrayList
+-cityList: ListView
+-cityAdapter: CityArrayAdapter
+#onCreate(arg0: Bundle) void
++addCity(arg0: City) void
++updateCity() void
+-lambda$onCreate$1(arg0: View) void
+-lambda$onCreate$0(arg0: AdapterView, arg1: View, arg2: int, arg3: long) void
+}
+
+class City {
+-name: String
+-province: String
++setName(arg0: String) void
++setProvince(arg0: String) void
++getName() String
++getProvince() String
+}
+
+class CityArrayAdapter {
++getView(arg0: int, arg1: View, arg2: ViewGroup) View
+}
+MainActivity <-- City
+MainActivity <-- CityArrayAdapter
+CityArrayAdapter <-- City

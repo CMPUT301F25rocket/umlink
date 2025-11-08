@@ -1,15 +1,18 @@
+mod descriptor;
+mod classfile_utils;
+mod mermaid_output;
+
 use anyhow::anyhow;
 use clap::Parser;
-use jclassfile::{
-    class_file::{self, ClassFile},
-    constant_pool::ConstantPool,
-};
-use mermaid_parser::{parser::parse, types::Diagram};
+use jclassfile::class_file::{self, ClassFile};
+use mermaid_parser::types::Diagram;
 use std::{
-    collections::BTreeMap,
+    collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
+use classfile_utils::classfile_to_mermaid_class;
+use mermaid_output::serialize_diagram;
 
 /// This program will take in a list of mermaid files which need "linking"
 /// according to some list of targets.
@@ -119,6 +122,7 @@ fn load_classfiles(
 
 const FAILED_TO_LOAD_CLASSFILES: i32 = 1;
 const FAILED_TO_LOAD_DIAGRAM: i32 = 2;
+const FAILED_TO_WRITE_OUTPUT: i32 = 3;
 
 #[derive(thiserror::Error, derive_more::From, Debug)]
 enum LoadMermaidError {
@@ -133,46 +137,50 @@ fn load_mermaid(path: &Path) -> Result<mermaid_parser::types::Diagram, LoadMerma
     Ok(mermaid_parser::parser::parse(&link_content)?)
 }
 
-// PERF: This is a hot function, and it gets hotter for large projects.
-// probably want it to run fast.
-fn try_retrieve(classfiles: &BTreeMap<String, ClassFile>, class_name: &str) {
-    for (name, class) in classfiles {
-        // SAFETY: Only way this doesn't work is if we are given malformed classfiles.
-        let class_name = unsafe {
-            let ConstantPool::Class { name_index } = class
-                .constant_pool()
-                .get_unchecked(class.this_class() as usize)
-            else {
-                panic!("This is not formed how I expect");
-            };
-            let ConstantPool::Utf8 { value } =
-                class.constant_pool().get_unchecked(*name_index as usize)
-            else {
-                panic!("This is not formed how I expect");
-            };
-            value
-        };
+/// Collect all class names referenced in the diagram (from stubs and relations)
+fn collect_referenced_classes(diagram: &Diagram) -> HashSet<String> {
+    let mut referenced = HashSet::new();
 
-        println!("filename: {}\n class name: {}\n\n", name, class_name);
+    // Add all classes defined in the diagram
+    for (_namespace_name, namespace) in &diagram.namespaces {
+        for (class_name, _class) in &namespace.classes {
+            referenced.insert(class_name.clone());
+        }
     }
+
+    // Add all classes referenced in relations
+    for relation in &diagram.relations {
+        referenced.insert(relation.from.clone());
+        referenced.insert(relation.to.clone());
+    }
+
+    referenced
 }
 
 fn main() {
     let args = Args::parse();
 
+    // Create output directory if it doesn't exist
+    if !args.output.exists() {
+        if let Err(why) = fs::create_dir_all(&args.output) {
+            eprintln!("ERROR: Failed to create output directory: {}", why);
+            std::process::exit(FAILED_TO_WRITE_OUTPUT);
+        }
+    }
+
     // Load all relevant classfiles and diagrams. We halt if there is an error.
     let mut classfiles = BTreeMap::<String, ClassFile>::new();
-    for include_path in args.include {
-        if let Err(why) = load_classfiles(&mut classfiles, &include_path) {
+    for include_path in &args.include {
+        if let Err(why) = load_classfiles(&mut classfiles, include_path) {
             eprintln!("ERROR: {}", why);
             std::process::exit(FAILED_TO_LOAD_CLASSFILES);
         }
     }
 
-    let mut diagrams = Vec::<Diagram>::with_capacity(args.target.len());
-    for target_path in args.target {
-        match load_mermaid(&target_path) {
-            Ok(diagram) => diagrams.push(diagram),
+    let mut diagrams_with_paths = Vec::<(PathBuf, Diagram)>::with_capacity(args.target.len());
+    for target_path in &args.target {
+        match load_mermaid(target_path) {
+            Ok(diagram) => diagrams_with_paths.push((target_path.clone(), diagram)),
             Err(why) => {
                 eprintln!("ERROR: {}", why);
                 std::process::exit(FAILED_TO_LOAD_DIAGRAM);
@@ -180,18 +188,53 @@ fn main() {
         }
     }
 
-    let mut outstring = String::new();
+    let skip_annotation = args.skip.as_deref();
 
-    // Now consider each diagram and what is needs to contain.
-    for diagram in diagrams {
-        outstring.clear();
+    // Process each diagram
+    for (target_path, mut diagram) in diagrams_with_paths {
+        // Collect all class names that need to be in the diagram
+        let referenced_classes = collect_referenced_classes(&diagram);
 
-        for (namepace_name, namespace) in diagram.namespaces {
-            for (class_name, class) in namespace.classes {
-                try_retrieve(&classfiles, "");
+        // For each referenced class, populate it from the classfile if available
+        for class_name in referenced_classes {
+            // Try to find the corresponding classfile
+            if let Some(classfile) = classfiles.get(&class_name) {
+                // Convert classfile to Mermaid class
+                let mermaid_class = classfile_to_mermaid_class(
+                    classfile,
+                    &class_name,
+                    skip_annotation,
+                );
+
+                // Replace or add the class in the diagram
+                // For simplicity, we'll work with the default namespace
+                let namespace = diagram
+                    .namespaces
+                    .entry(mermaid_parser::types::DEFAULT_NAMESPACE.to_string())
+                    .or_default();
+
+                namespace.classes.insert(class_name.clone(), mermaid_class);
+            } else {
+                // Class not found in classfiles - keep the stub if it exists
+                eprintln!("WARN: Class '{}' referenced in diagram but not found in classfiles", class_name);
             }
         }
 
-        for relation in diagram.relations {}
+        // Serialize the diagram to Mermaid text
+        let output_text = serialize_diagram(&diagram);
+
+        // Determine output file path
+        let output_filename = target_path
+            .file_name()
+            .unwrap_or_else(|| std::ffi::OsStr::new("output.mmd"));
+        let output_path = args.output.join(output_filename);
+
+        // Write to file
+        if let Err(why) = fs::write(&output_path, output_text) {
+            eprintln!("ERROR: Failed to write output file {}: {}", output_path.display(), why);
+            std::process::exit(FAILED_TO_WRITE_OUTPUT);
+        }
+
+        println!("Successfully wrote linked diagram to {}", output_path.display());
     }
 }
