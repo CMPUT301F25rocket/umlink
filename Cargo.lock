@@ -262,8 +262,7 @@ checksum = "4a5f13b858c8d314ee3e8f639011f7ccefe71f97f96e50151fb991f267928e2c"
 [[package]]
 name = "jclassfile"
 version = "0.3.0"
-source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "5f0db25e44b0823f2136abf3999fb1c3365991692d6f2a22670746098d8380fd"
+source = "git+https://github.com/GenericConfluent/jclassfile.git?rev=b6b38a3#b6b38a33049dd91c778410e71af85dba3241223c"
 dependencies = [
  "bitflags",
  "cesu8",
