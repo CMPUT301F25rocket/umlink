@@ -100,21 +100,23 @@ fn serialize_class(class: &Class) -> String {
 }
 
 /// Serialize a relation to Mermaid format
+/// The parser stores from/to such that the arrow always points from->to
+/// So we always use right-pointing arrow syntax
 fn serialize_relation(relation: &Relation) -> String {
     let mut output = String::new();
 
     write!(output, "{} ", relation.from).unwrap();
 
-    // Build the relation symbol
+    // Build the relation symbol (always right-pointing since parser normalizes)
     match (relation.kind, relation.line) {
-        (RelationKind::Aggregation, LineStyle::Solid) => output.push_str("o--"),
-        (RelationKind::Aggregation, LineStyle::Dotted) => output.push_str("o.."),
-        (RelationKind::Composition, LineStyle::Solid) => output.push_str("*--"),
-        (RelationKind::Composition, LineStyle::Dotted) => output.push_str("*.."),
-        (RelationKind::Extension, LineStyle::Solid) => output.push_str("<|--"),
-        (RelationKind::Extension, LineStyle::Dotted) => output.push_str("<|.."),
-        (RelationKind::Dependency, LineStyle::Solid) => output.push_str("<--"),
-        (RelationKind::Dependency, LineStyle::Dotted) => output.push_str("<.."),
+        (RelationKind::Aggregation, LineStyle::Solid) => output.push_str("--o"),
+        (RelationKind::Aggregation, LineStyle::Dotted) => output.push_str("..o"),
+        (RelationKind::Composition, LineStyle::Solid) => output.push_str("--*"),
+        (RelationKind::Composition, LineStyle::Dotted) => output.push_str("..*"),
+        (RelationKind::Extension, LineStyle::Solid) => output.push_str("--|>"),
+        (RelationKind::Extension, LineStyle::Dotted) => output.push_str("..|>"),
+        (RelationKind::Dependency, LineStyle::Solid) => output.push_str("-->"),
+        (RelationKind::Dependency, LineStyle::Dotted) => output.push_str("..>"),
         (RelationKind::Lollipop, _) => output.push_str("--o"),
     }
 

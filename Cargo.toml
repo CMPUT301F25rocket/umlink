@@ -17,6 +17,5 @@ git = "https://github.com/GenericConfluent/jclassfile.git"
 rev = "b6b38a3"
 
 [dependencies.mermaid-parser]
-git = "https://github.com/Last-butnotleast/mermaid-parser.git"
-rev = "04ae89c"
+git = "https://github.com/GenericConfluent/mermaid-parser.git"
 

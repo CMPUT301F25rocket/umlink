@@ -16,9 +16,9 @@ class NotificationRepository
 
 class QRGenerator
 
-NotificationAdapter --> Notification
+NotificationAdapter <-- Notification
 NotificationAdapter --> NotificationAdapter_NotificationViewHolder
-NotificationAdapter --> NotificationAdapter_SeparatorViewHolder
+NotificationAdapter <-- NotificationAdapter_SeparatorViewHolder
 NotificationAdapter --> NotificationAdapter_EmptyViewHolder
 NotificationRepository --> Notification
 MainActivity --> NotificationRepository

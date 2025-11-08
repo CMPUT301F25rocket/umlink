@@ -168,8 +168,8 @@ pub fn classfile_to_mermaid_class(
             .unwrap_or("unknown")
             .to_string();
 
-        // Skip constructors and static initializers
-        if name == "<init>" || name == "<clinit>" {
+        // Skip constructors, static initializers, and lambda methods
+        if name == "<init>" || name == "<clinit>" || name.starts_with("lambda$") {
             continue;
         }
 
