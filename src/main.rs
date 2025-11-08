@@ -3,7 +3,6 @@ use clap::Parser;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::{parser::parse, types::Diagram};
 use std::{
-    collections::hash_map::Keys,
     fs,
     path::{Path, PathBuf},
 };
