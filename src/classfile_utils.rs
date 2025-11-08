@@ -70,13 +70,55 @@ pub fn method_visibility(flags: &MethodFlags) -> Visibility {
     }
 }
 
-/// Check if a field/method has a specific annotation
-/// Note: Since we can't easily get the constant pool here, we'll skip this check for now
-/// A full implementation would need to resolve type_index through the constant pool
-pub fn has_annotation(_attributes: &[Attribute], _skip_annotation: Option<&str>) -> bool {
-    // TODO: Implement annotation checking by resolving type_index through constant pool
-    // For now, we'll assume no annotations match (conservative approach)
+/// Check if a field/method/class has a specific annotation
+pub fn has_annotation(
+    constant_pool: &[ConstantPool],
+    attributes: &[Attribute],
+    skip_annotation: Option<&str>,
+) -> bool {
+    let Some(skip_name) = skip_annotation else {
+        return false;
+    };
+
+    for attr in attributes {
+        match attr {
+            Attribute::RuntimeVisibleAnnotations { annotations, .. } => {
+                for annotation in annotations {
+                    if let Some(type_name) = get_annotation_type(constant_pool, annotation.type_index()) {
+                        // Annotation type is in format "Lcom/example/myapp/Skip;"
+                        // Convert to "com.example.myapp.Skip" and check if it matches
+                        let type_name_clean = type_name
+                            .trim_start_matches('L')
+                            .trim_end_matches(';')
+                            .replace('/', ".");
+                        if type_name_clean == skip_name {
+                            return true;
+                        }
+                    }
+                }
+            }
+            Attribute::RuntimeInvisibleAnnotations { annotations } => {
+                for annotation in annotations {
+                    if let Some(type_name) = get_annotation_type(constant_pool, annotation.type_index()) {
+                        let type_name_clean = type_name
+                            .trim_start_matches('L')
+                            .trim_end_matches(';')
+                            .replace('/', ".");
+                        if type_name_clean == skip_name {
+                            return true;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
     false
+}
+
+/// Get annotation type name from constant pool
+fn get_annotation_type(constant_pool: &[ConstantPool], type_index: u16) -> Option<String> {
+    get_utf8(constant_pool, type_index).map(|s| s.to_string())
 }
 
 /// Extract parameter names from method attributes (if available)
@@ -161,7 +203,7 @@ pub fn classfile_to_mermaid_class(
     let mut members = Vec::new();
     for field in class_file.fields() {
         // Skip if field has the skip annotation
-        if has_annotation(field.attributes(), skip_annotation) {
+        if has_annotation(constant_pool, field.attributes(), skip_annotation) {
             continue;
         }
 
@@ -183,7 +225,7 @@ pub fn classfile_to_mermaid_class(
     // Extract methods
     for method in class_file.methods() {
         // Skip if method has the skip annotation
-        if has_annotation(method.attributes(), skip_annotation) {
+        if has_annotation(constant_pool, method.attributes(), skip_annotation) {
             continue;
         }
 

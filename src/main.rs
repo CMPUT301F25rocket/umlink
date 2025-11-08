@@ -293,6 +293,15 @@ fn main() {
         for class_name in referenced_classes {
             // Try to find the corresponding classfile
             if let Some(classfile) = classfiles.get(&class_name) {
+                // Check if the class itself has the skip annotation
+                if classfile_utils::has_annotation(
+                    classfile.constant_pool(),
+                    classfile.attributes(),
+                    skip_annotation,
+                ) {
+                    continue; // Skip this entire class
+                }
+
                 // Convert classfile to Mermaid class
                 let mut mermaid_class = classfile_to_mermaid_class(
                     classfile,
