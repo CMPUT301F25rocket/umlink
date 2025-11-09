@@ -1,28 +1,82 @@
+---
+title: My class diagram
+umlink:
+  groupPackage: false
+---
 classDiagram
-
-class MainActivity {
--dataList: ArrayList
--cityList: ListView
--cityAdapter: CityArrayAdapter
-#onCreate(arg0: Bundle) void
-+addCity(arg0: City) void
-+updateCity() void
--lambda$onCreate$1(arg0: View) void
--lambda$onCreate$0(arg0: AdapterView, arg1: View, arg2: int, arg3: long) void
-}
-
-class City {
--name: String
--province: String
-+setName(arg0: String) void
-+setProvince(arg0: String) void
-+getName() String
-+getProvince() String
-}
-
-class CityArrayAdapter {
-+getView(arg0: int, arg1: View, arg2: ViewGroup) View
-}
-MainActivity <-- City
-MainActivity <-- CityArrayAdapter
-CityArrayAdapter <-- City
+class NotificationAdapter_EmptyViewHolder
+class NotificationAdapter_NotificationViewHolder
+NotificationAdapter_NotificationViewHolder : ~eventImage: ImageView
+NotificationAdapter_NotificationViewHolder : ~eventTitle: TextView
+NotificationAdapter_NotificationViewHolder : ~notificationType: TextView
+NotificationAdapter_NotificationViewHolder : ~unreadIndicator: View
+class NotificationRepository
+NotificationRepository : -$TAG: String
+NotificationRepository : -db: FirebaseFirestore
+NotificationRepository : -userNotificationsRef: CollectionReference
+NotificationRepository : +getMyNotifications() LiveData
+NotificationRepository : +markNotificationAsRead(userNotificationId: String) void
+NotificationRepository : +sendNotificationToGroup(title: String, body: String, eventId: String, groupCollection: String) void
+NotificationRepository : -createAndFanOutNotification(title: String, body: String, usersToNotify: List) void
+class MainActivity
+MainActivity : -navBarBinding: NavBarBinding
+MainActivity : -$TAG: String
+MainActivity : -mAuth: FirebaseAuth
+MainActivity : -profileViewModel: ProfileViewModel
+MainActivity : -fusedLocationClient: FusedLocationProviderClient
+MainActivity : -navController: NavController
+MainActivity : -repo: ProfileRepository
+MainActivity : -isObserverInitialized: boolean
+MainActivity : -requestNotificationPermissionLauncher: ActivityResultLauncher
+MainActivity : -requestLocationPermissionLauncher: ActivityResultLauncher
+MainActivity : #onCreate(savedInstanceState: Bundle) void
+MainActivity : -askNotificationPermission() void
+MainActivity : +onStart() void
+MainActivity : #onNewIntent(intent: Intent) void
+MainActivity : #onResume() void
+MainActivity : -signInAnonymously() void
+MainActivity : -handleUserSignIn(user: FirebaseUser) void
+MainActivity : -checkGeolocationPermission(profile: ProfileModel) void
+MainActivity : -fetchLastKnownLocation() void
+MainActivity : +setBottomNavigationVisibility(visibility: int) void
+class QRGenerator
+QRGenerator : +$generate(eventId: String) Bitmap
+class NotificationAdapter
+NotificationAdapter : -$VIEW_TYPE_NOTIFICATION: int
+NotificationAdapter : -$VIEW_TYPE_SEPARATOR: int
+NotificationAdapter : -$VIEW_TYPE_EMPTY: int
+NotificationAdapter : -context: Context
+NotificationAdapter : -notificationList: List
+NotificationAdapter : -repository: NotificationRepository
+NotificationAdapter : -separatorIndex: int
+NotificationAdapter : +setNotifications(newNotifications: List) void
+NotificationAdapter : -calculateSeparatorIndex() void
+NotificationAdapter : +getItemViewType(position: int) int
+NotificationAdapter : +onCreateViewHolder(parent: ViewGroup, viewType: int) RecyclerView_ViewHolder
+NotificationAdapter : +onBindViewHolder(holder: RecyclerView_ViewHolder, position: int) void
+NotificationAdapter : +getItemCount() int
+class NotificationAdapter_SeparatorViewHolder
+NotificationAdapter_SeparatorViewHolder : ~separatorText: TextView
+class Notification
+Notification : -eventTitle: String
+Notification : -notificationType: String
+Notification : -image: int
+Notification : -timestamp: Date
+Notification : -notificationId: String
+Notification : -userNotificationId: String
+Notification : -readStatus: boolean
+Notification : +getEventTitle() String
+Notification : +getNotificationType() String
+Notification : +isReadStatus() boolean
+Notification : +getImage() int
+Notification : +getTimestamp() Date
+Notification : +getNotificationId() String
+Notification : +getUserNotificationId() String
+Notification : +setReadStatus(readStatus: boolean) void
+Notification : +setUserNotificationId(userNotificationId: String) void
+Notification --> NotificationAdapter
+NotificationAdapter --> NotificationAdapter_NotificationViewHolder
+NotificationAdapter_SeparatorViewHolder --> NotificationAdapter
+NotificationAdapter --> NotificationAdapter_EmptyViewHolder
+NotificationRepository --> Notification
+MainActivity --> NotificationRepository
