@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Compilation script for umlink test Java files
-# This script compiles Java source files from tests/java/ into tests/class/
+# This script compiles Java source files from test_data/java/ into test_data/class/
 
 set -e  # Exit on error
 
@@ -33,7 +33,7 @@ ROCKET_FILES=$(find "$JAVA_DIR/com/rocket" -name "*.java" 2>/dev/null || true)
 
 if [ -n "$ROCKET_FILES" ]; then
     echo "Note: Android-related classes (com.rocket.radar.*) cannot be compiled without Android SDK."
-    echo "These are stub files for documentation purposes. The actual .class files in tests/class/"
+    echo "These are stub files for documentation purposes. The actual .class files in test_data/class/"
     echo "were compiled from the original Android project and are used as-is for testing."
     echo ""
     echo "Android stub files found (not compiled):"

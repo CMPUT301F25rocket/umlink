@@ -1,11 +1,15 @@
 # Test Data for umlink
 
-This directory contains all test data and integration tests for the umlink project.
+This directory contains all test data for the umlink project.
+
+**Note:** Integration tests that run automatically with `cargo test` are located in the
+`tests/` directory at the project root (following Rust conventions). This `test_data/`
+directory contains the Java classes and Mermaid files used by those integration tests.
 
 ## Directory Structure
 
 ```
-tests/
+test_data/
 ├── java/           # Java source files for test classes
 ├── class/          # Compiled .class files for testing
 ├── input/          # Sample mermaid diagram files
@@ -60,7 +64,7 @@ Contains sample `.mmd` (Mermaid) diagram files for testing:
 To recompile the `com.example.*` classes from source:
 
 ```bash
-cd tests
+cd test_data
 ./compile.sh
 ```
 
@@ -71,20 +75,26 @@ This will compile all Java files in `java/com/example/` into `class/`.
 
 ## Running Tests
 
-To run umlink with the test data:
+Integration tests run automatically with:
+
+```bash
+cargo test
+```
+
+To manually run umlink with the test data:
 
 ```bash
 # From the project root
 cargo build
 
 # Generate a linked diagram
-./target/debug/umlink tests/input/test.mmd -i tests/class -o output
+./target/debug/umlink test_data/input/test.mmd -i test_data/class -o output
 
 # Test skip annotation (com.example.Skip)
-./target/debug/umlink tests/input/test_skip.mmd -i tests/class -o output -s com.example.Skip
+./target/debug/umlink test_data/input/test_skip.mmd -i test_data/class -o output -s com.example.Skip
 
 # Test class retention annotation (com.example.SkipClass)
-./target/debug/umlink tests/input/test_class_retention.mmd -i tests/class -o output -s com.example.SkipClass
+./target/debug/umlink test_data/input/test_class_retention.mmd -i test_data/class -o output -s com.example.SkipClass
 ```
 
 ## Test Philosophy
