@@ -1,18 +1,17 @@
 mod descriptor;
 mod classfile_utils;
-mod mermaid_output;
 
 use anyhow::anyhow;
 use clap::Parser;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::types::Diagram;
+use mermaid_parser::serializer::serialize_diagram;
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
 use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
-use mermaid_output::serialize_diagram;
 
 /// This program will take in a list of mermaid files which need "linking"
 /// according to some list of targets.

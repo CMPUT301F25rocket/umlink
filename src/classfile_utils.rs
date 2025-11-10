@@ -7,7 +7,7 @@ use jclassfile::{
     methods::MethodFlags,
     attributes::Attribute,
 };
-use mermaid_parser::types::{Class, Member, Method, Attribute as MermaidAttribute, Visibility, Parameter};
+use mermaid_parser::types::{Class, Member, Method, Attribute as MermaidAttribute, Visibility, Parameter, TypeNotation};
 use crate::descriptor::{parse_field_descriptor, parse_method_descriptor};
 
 /// Get a UTF-8 string from the constant pool by index
@@ -219,6 +219,7 @@ pub fn classfile_to_mermaid_class(
             name,
             data_type: Some(data_type),
             is_static: field.access_flags().contains(FieldFlags::ACC_STATIC),
+            type_notation: TypeNotation::Postfix,
         }));
     }
 
@@ -249,6 +250,7 @@ pub fn classfile_to_mermaid_class(
             .map(|(name, data_type)| Parameter {
                 name,
                 data_type: Some(data_type),
+                type_notation: TypeNotation::Postfix,
             })
             .collect();
 
@@ -259,6 +261,7 @@ pub fn classfile_to_mermaid_class(
             return_type: Some(return_type),
             is_static: method.access_flags().contains(MethodFlags::ACC_STATIC),
             is_abstract: method.access_flags().contains(MethodFlags::ACC_ABSTRACT),
+            return_type_notation: TypeNotation::Postfix,
         }));
     }
 
