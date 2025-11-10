@@ -1,13 +1,7 @@
 classDiagram
-class SkippedClass
-SkippedClass : -someField: String
-SkippedClass : +someMethod() void
 class TestClass
 TestClass : -visibleField: String
-TestClass : -hiddenField: String
 TestClass : -anotherVisibleField: int
 TestClass : +visibleMethod() void
-TestClass : +hiddenMethod() void
 TestClass : +getVisibleField() String
-TestClass : +getHiddenField() String
 TestClass --> SkippedClass

@@ -4,12 +4,25 @@ umlink:
   groupPackage: false
 ---
 classDiagram
-class NotificationAdapter_EmptyViewHolder
-class NotificationAdapter_NotificationViewHolder
-NotificationAdapter_NotificationViewHolder : ~eventImage: ImageView
-NotificationAdapter_NotificationViewHolder : ~eventTitle: TextView
-NotificationAdapter_NotificationViewHolder : ~notificationType: TextView
-NotificationAdapter_NotificationViewHolder : ~unreadIndicator: View
+class Notification
+Notification : -eventTitle: String
+Notification : -notificationType: String
+Notification : -image: int
+Notification : -timestamp: Date
+Notification : -notificationId: String
+Notification : -userNotificationId: String
+Notification : -readStatus: boolean
+Notification : +getEventTitle() String
+Notification : +getNotificationType() String
+Notification : +isReadStatus() boolean
+Notification : +getImage() int
+Notification : +getTimestamp() Date
+Notification : +getNotificationId() String
+Notification : +getUserNotificationId() String
+Notification : +setReadStatus(readStatus: boolean) void
+Notification : +setUserNotificationId(userNotificationId: String) void
+class NotificationAdapter_SeparatorViewHolder
+NotificationAdapter_SeparatorViewHolder : ~separatorText: TextView
 class NotificationRepository
 NotificationRepository : -$TAG: String
 NotificationRepository : -db: FirebaseFirestore
@@ -39,8 +52,14 @@ MainActivity : -handleUserSignIn(user: FirebaseUser) void
 MainActivity : -checkGeolocationPermission(profile: ProfileModel) void
 MainActivity : -fetchLastKnownLocation() void
 MainActivity : +setBottomNavigationVisibility(visibility: int) void
+class NotificationAdapter_EmptyViewHolder
 class QRGenerator
 QRGenerator : +$generate(eventId: String) Bitmap
+class NotificationAdapter_NotificationViewHolder
+NotificationAdapter_NotificationViewHolder : ~eventImage: ImageView
+NotificationAdapter_NotificationViewHolder : ~eventTitle: TextView
+NotificationAdapter_NotificationViewHolder : ~notificationType: TextView
+NotificationAdapter_NotificationViewHolder : ~unreadIndicator: View
 class NotificationAdapter
 NotificationAdapter : -$VIEW_TYPE_NOTIFICATION: int
 NotificationAdapter : -$VIEW_TYPE_SEPARATOR: int
@@ -55,25 +74,6 @@ NotificationAdapter : +getItemViewType(position: int) int
 NotificationAdapter : +onCreateViewHolder(parent: ViewGroup, viewType: int) RecyclerView_ViewHolder
 NotificationAdapter : +onBindViewHolder(holder: RecyclerView_ViewHolder, position: int) void
 NotificationAdapter : +getItemCount() int
-class NotificationAdapter_SeparatorViewHolder
-NotificationAdapter_SeparatorViewHolder : ~separatorText: TextView
-class Notification
-Notification : -eventTitle: String
-Notification : -notificationType: String
-Notification : -image: int
-Notification : -timestamp: Date
-Notification : -notificationId: String
-Notification : -userNotificationId: String
-Notification : -readStatus: boolean
-Notification : +getEventTitle() String
-Notification : +getNotificationType() String
-Notification : +isReadStatus() boolean
-Notification : +getImage() int
-Notification : +getTimestamp() Date
-Notification : +getNotificationId() String
-Notification : +getUserNotificationId() String
-Notification : +setReadStatus(readStatus: boolean) void
-Notification : +setUserNotificationId(userNotificationId: String) void
 Notification --> NotificationAdapter
 NotificationAdapter --> NotificationAdapter_NotificationViewHolder
 NotificationAdapter_SeparatorViewHolder --> NotificationAdapter
