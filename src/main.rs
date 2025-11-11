@@ -218,14 +218,6 @@ fn should_group_by_package(diagram: &Diagram) -> bool {
 fn main() {
     let args = Args::parse();
 
-    // Create output directory if it doesn't exist
-    if !args.output.exists() {
-        if let Err(why) = fs::create_dir_all(&args.output) {
-            eprintln!("ERROR: Failed to create output directory: {}", why);
-            std::process::exit(FAILED_TO_WRITE_OUTPUT);
-        }
-    }
-
     // Load all relevant classfiles and diagrams. We halt if there is an error.
     let mut classfiles = BTreeMap::<String, ClassFile>::new();
     for include_path in &args.classfiles {
@@ -317,15 +309,47 @@ fn main() {
     // Serialize the diagram to Mermaid text
     let output_text = serialize_diagram(&diagram);
 
-    // Determine output file path
-    let default_name = || std::ffi::OsStr::new("output.mmd");
-    let output_filename = args
-        .diagram
-        .as_ref()
-        .map(|path| path.file_name().unwrap_or_else(default_name));
-    let output_path = args
-        .output
-        .join(output_filename.unwrap_or_else(default_name));
+    // Determine output file path based on whether output is a file or directory
+    let output_path = if args.output.exists() {
+        if args.output.is_dir() {
+            // Output path exists and is a directory - use default filename
+            let default_name = || std::ffi::OsStr::new("output.mmd");
+            let output_filename = args
+                .diagram
+                .as_ref()
+                .map(|path| path.file_name().unwrap_or_else(default_name));
+            args.output.join(output_filename.unwrap_or_else(default_name))
+        } else {
+            // Output path exists and is a file - abort to avoid overwriting
+            eprintln!(
+                "ERROR: Output path {} already exists as a file. Refusing to overwrite.",
+                args.output.display()
+            );
+            std::process::exit(FAILED_TO_WRITE_OUTPUT);
+        }
+    } else {
+        // Output path doesn't exist - check if parent directory exists
+        if let Some(parent) = args.output.parent() {
+            // Check if parent is empty (e.g., just a filename like "sample.mmd")
+            if parent.as_os_str().is_empty() {
+                // No parent directory specified - use current directory
+                args.output.clone()
+            } else if parent.exists() && parent.is_dir() {
+                // Parent directory exists - use the given path as the output filename
+                args.output.clone()
+            } else {
+                // Parent directory doesn't exist
+                eprintln!(
+                    "ERROR: Parent directory {} does not exist",
+                    parent.display()
+                );
+                std::process::exit(FAILED_TO_WRITE_OUTPUT);
+            }
+        } else {
+            // No parent (shouldn't normally happen, but handle it)
+            args.output.clone()
+        }
+    };
 
     // Write to file
     if let Err(why) = fs::write(&output_path, output_text) {
