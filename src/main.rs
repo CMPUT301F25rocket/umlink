@@ -3,7 +3,10 @@ mod descriptor;
 
 use anyhow::anyhow;
 use clap::Parser;
-use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name, is_annotation};
+use classfile_utils::{
+    classfile_to_mermaid_class, get_full_class_name, get_interface_names, get_package_name,
+    get_superclass_name, is_annotation,
+};
 use descriptor::extract_class_name_from_descriptor;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::serializer::serialize_diagram;
@@ -380,6 +383,32 @@ fn main() {
                     }
                 }
             }
+        }
+
+        // Add inheritance relationship if the class extends another class
+        if let Some(superclass) = get_superclass_name(classfile) {
+            let relation = mermaid_parser::types::Relation {
+                tail: class_name.clone().into(),
+                head: superclass.into(),
+                kind: RelationKind::Inheritance,
+                cardinality_tail: None,
+                cardinality_head: None,
+                label: None,
+            };
+            diagram.relations.push(relation);
+        }
+
+        // Add realization relationships for implemented interfaces
+        for interface in get_interface_names(classfile) {
+            let relation = mermaid_parser::types::Relation {
+                tail: class_name.clone().into(),
+                head: interface.into(),
+                kind: RelationKind::Realization,
+                cardinality_tail: None,
+                cardinality_head: None,
+                label: None,
+            };
+            diagram.relations.push(relation);
         }
     }
 

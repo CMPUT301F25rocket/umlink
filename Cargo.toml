@@ -1,6 +1,6 @@
 [package]
 name = "umlink"
-version = "0.1.1"
+version = "0.2.0"
 edition = "2024"
 
 [dependencies]
@@ -17,6 +17,5 @@ git = "https://github.com/GenericConfluent/jclassfile.git"
 rev = "b6b38a3"
 
 [dependencies.mermaid-parser]
-# git = "https://github.com/GenericConfluent/mermaid-parser.git"
-path = "../mermaid-parser"
+git = "https://github.com/GenericConfluent/mermaid-parser.git"
 

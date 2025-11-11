@@ -34,6 +34,52 @@ pub fn get_full_class_name(class_file: &ClassFile) -> Option<String> {
     }
 }
 
+/// Get the simple class name from a constant pool class index
+fn get_class_name_from_index(constant_pool: &[ConstantPool], class_index: u16) -> Option<String> {
+    if class_index == 0 {
+        return None;
+    }
+
+    if let Some(ConstantPool::Class { name_index }) = constant_pool.get(class_index as usize) {
+        if let Some(full_name) = get_utf8(constant_pool, *name_index) {
+            let simple_name = full_name.rsplit('/').next().unwrap_or(full_name);
+            // Replace $ with . for inner classes
+            return Some(simple_name.replace('$', "."));
+        }
+    }
+    None
+}
+
+/// Get the superclass name (simple name, not fully qualified)
+/// Returns None if the class extends Object or has no superclass
+pub fn get_superclass_name(class_file: &ClassFile) -> Option<String> {
+    let super_class_index = class_file.super_class();
+    if super_class_index == 0 {
+        return None; // No superclass (only for Object)
+    }
+
+    let constant_pool = class_file.constant_pool();
+    let super_name = get_class_name_from_index(constant_pool, super_class_index)?;
+
+    // Skip java.lang.Object and java.lang.Enum as they're implicit
+    if super_name == "Object" || super_name == "Enum" {
+        None
+    } else {
+        Some(super_name)
+    }
+}
+
+/// Get the list of interface names (simple names, not fully qualified)
+pub fn get_interface_names(class_file: &ClassFile) -> Vec<String> {
+    let constant_pool = class_file.constant_pool();
+    let interfaces = class_file.interfaces();
+
+    interfaces
+        .iter()
+        .filter_map(|&interface_index| get_class_name_from_index(constant_pool, interface_index))
+        .collect()
+}
+
 /// Extract package name from a fully qualified class name
 /// e.g., "com/example/MyClass" -> "com/example"
 pub fn get_package_name(full_class_name: &str) -> &str {
