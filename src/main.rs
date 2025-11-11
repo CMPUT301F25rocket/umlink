@@ -18,22 +18,35 @@ use std::{
 #[derive(clap::Parser)]
 pub struct Args {
     /// Some mermaid diagram file, generally containing relationships but
-    /// can also have classes. These do not need to end with .mmd and will
-    /// be assumed to have valid mermaid.
-    target: Vec<PathBuf>,
+    /// can also have classes. It is basically a starting off point for the
+    /// diagram generation.
+    diagram: Option<PathBuf>,
     /// Files and folders to search for class definitions. Folders will be
     /// searched recursively any folder. These should be java class files.
     #[arg(short, long)]
-    include: Vec<PathBuf>,
-    /// Directory to write the final files to
+    classfiles: Vec<PathBuf>,
+    /// Directory or filename for output file. If a directory is given this
+    /// will be the same as the input name.
     #[arg(short, long)]
     output: PathBuf,
     /// The fully qualified path of the skip annotation to optionally enable
     /// ommiting some types, fields, or methods. (e.g. `com.rocket.radar.Skip`)
     /// Note that this annotation must have a retention policy of RUNTIME
     /// or CLASS.
-    #[arg(short, long)]
+    #[arg(long)]
     skip: Option<String>,
+    /// Fully qualified path to the aggregate annotation.
+    #[arg(long)]
+    aggregate: Option<String>,
+    /// Fully qualified path to the compose annotation.
+    #[arg(long)]
+    compose: Option<String>,
+    /// Fully qualified path to the link annotation
+    #[arg(long)]
+    link: Option<String>,
+    /// Fully qualified path to the navigate annotation.
+    #[arg(long)]
+    navigate: Option<String>,
 }
 
 #[derive(thiserror::Error, derive_more::From, Debug)]
@@ -234,110 +247,116 @@ fn main() {
 
     // Load all relevant classfiles and diagrams. We halt if there is an error.
     let mut classfiles = BTreeMap::<String, ClassFile>::new();
-    for include_path in &args.include {
+    for include_path in &args.classfiles {
         if let Err(why) = load_classfiles(&mut classfiles, include_path) {
             eprintln!("ERROR: {}", why);
             std::process::exit(FAILED_TO_LOAD_CLASSFILES);
         }
     }
 
-    let mut diagrams_with_paths = Vec::<(PathBuf, Diagram)>::with_capacity(args.target.len());
-    for target_path in &args.target {
-        match load_mermaid(target_path) {
-            Ok(diagram) => diagrams_with_paths.push((target_path.clone(), diagram)),
+    let mut diagram = if let Some(diagram_path) = &args.diagram {
+        match load_mermaid(&diagram_path) {
+            Ok(diagram) => diagram,
             Err(why) => {
                 eprintln!("ERROR: {}", why);
                 std::process::exit(FAILED_TO_LOAD_DIAGRAM);
             }
         }
-    }
+    } else {
+        Diagram::default()
+    };
 
     let skip_annotation = args.skip.as_deref();
+    let aggregate_annotation = args.aggregate.as_deref();
+    let compose_annotation = args.compose.as_deref();
+    let link_annotation = args.link.as_deref();
+    let navigate_annotation = args.navigate.as_deref();
 
-    // Process each diagram
-    for (target_path, mut diagram) in diagrams_with_paths {
-        // Collect all class names that need to be in the diagram
-        let referenced_classes = collect_referenced_classes(&diagram);
+    // Collect all class names that need to be in the diagram
+    let referenced_classes = collect_referenced_classes(&diagram);
 
-        // Clear existing classes from namespaces (keep only relations and YAML)
-        // We'll repopulate with full class details from classfiles
-        diagram.namespaces.clear();
+    // Clear existing classes from namespaces (keep only relations and YAML)
+    // We'll repopulate with full class details from classfiles
+    diagram.namespaces.clear();
 
-        // Determine if we should group by package
-        let group_by_package = should_group_by_package(&diagram);
+    // Determine if we should group by package
+    let group_by_package = should_group_by_package(&diagram);
 
-        // If grouping by package, find the common base package
-        let base_package = if group_by_package {
-            let full_names: Vec<String> = referenced_classes
-                .iter()
-                .filter_map(|class_name| classfiles.get(class_name))
-                .filter_map(|classfile| get_full_class_name(classfile))
-                .collect();
+    // If grouping by package, find the common base package
+    let base_package = if group_by_package {
+        let full_names: Vec<String> = referenced_classes
+            .iter()
+            .filter_map(|class_name| classfiles.get(class_name))
+            .filter_map(|classfile| get_full_class_name(classfile))
+            .collect();
 
-            let packages: Vec<&str> = full_names
-                .iter()
-                .map(|full_name| get_package_name(full_name))
-                .filter(|pkg| !pkg.is_empty())
-                .collect();
+        let packages: Vec<&str> = full_names
+            .iter()
+            .map(|full_name| get_package_name(full_name))
+            .filter(|pkg| !pkg.is_empty())
+            .collect();
 
-            find_common_base_package(&packages)
-        } else {
-            String::new()
-        };
+        find_common_base_package(&packages)
+    } else {
+        String::new()
+    };
 
-        // For each referenced class, populate it from the classfile if available
-        for class_name in referenced_classes {
-            // Try to find the corresponding classfile
-            if let Some(classfile) = classfiles.get(&class_name) {
-                // Check if the class itself has the skip annotation
-                if classfile_utils::has_annotation(
-                    classfile.constant_pool(),
-                    classfile.attributes(),
-                    skip_annotation,
-                ) {
-                    continue; // Skip this entire class
-                }
+    // For each referenced class, populate it from the classfile if available
+    for class_name in referenced_classes {
+        // Try to find the corresponding classfile
+        if let Some(classfile) = classfiles.get(&class_name) {
+            // Check if the class itself has the skip annotation
+            if classfile_utils::has_annotation(
+                classfile.constant_pool(),
+                classfile.attributes(),
+                skip_annotation,
+            ) {
+                continue; // Skip this entire class
+            }
 
-                // Convert classfile to Mermaid class
-                let mut mermaid_class =
-                    classfile_to_mermaid_class(classfile, &class_name, skip_annotation);
+            // Convert classfile to Mermaid class
+            let mut mermaid_class =
+                classfile_to_mermaid_class(classfile, &class_name, skip_annotation);
 
-                // Determine the namespace for this class
-                let namespace_name = if group_by_package {
-                    if let Some(full_class_name) = get_full_class_name(classfile) {
-                        let package = get_package_name(&full_class_name);
-                        get_relative_namespace(&base_package, package)
-                    } else {
-                        mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
-                    }
+            // Determine the namespace for this class
+            let namespace_name = if group_by_package {
+                if let Some(full_class_name) = get_full_class_name(classfile) {
+                    let package = get_package_name(&full_class_name);
+                    get_relative_namespace(&base_package, package)
                 } else {
                     mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
-                };
-
-                // Update the class's namespace field
-                mermaid_class.namespace = namespace_name.clone();
-
-                // Add the class to the appropriate namespace
-                let namespace = diagram.namespaces.entry(namespace_name).or_default();
-
-                namespace.classes.insert(class_name.clone(), mermaid_class);
+                }
             } else {
-                // Class not found in classfiles - keep the stub if it exists
-                eprintln!(
-                    "WARN: Class '{}' referenced in diagram but not found in classfiles",
-                    class_name
-                );
-            }
+                mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
+            };
+
+            // Update the class's namespace field
+            mermaid_class.namespace = namespace_name.clone();
+
+            // Add the class to the appropriate namespace
+            let namespace = diagram.namespaces.entry(namespace_name).or_default();
+
+            namespace.classes.insert(class_name.clone(), mermaid_class);
+        } else {
+            // Class not found in classfiles - keep the stub if it exists
+            eprintln!(
+                "WARN: Class '{}' referenced in diagram but not found in classfiles",
+                class_name
+            );
         }
 
         // Serialize the diagram to Mermaid text
         let output_text = serialize_diagram(&diagram);
 
         // Determine output file path
-        let output_filename = target_path
-            .file_name()
-            .unwrap_or_else(|| std::ffi::OsStr::new("output.mmd"));
-        let output_path = args.output.join(output_filename);
+        let default_name = || std::ffi::OsStr::new("output.mmd");
+        let output_filename = args
+            .diagram
+            .as_ref()
+            .map(|path| path.file_name().unwrap_or_else(default_name));
+        let output_path = args
+            .output
+            .join(output_filename.unwrap_or_else(default_name));
 
         // Write to file
         if let Err(why) = fs::write(&output_path, output_text) {
