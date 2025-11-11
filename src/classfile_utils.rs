@@ -242,6 +242,11 @@ pub fn is_interface(class_file: &ClassFile) -> bool {
     class_file.access_flags().contains(ClassFlags::ACC_INTERFACE)
 }
 
+/// Check if classfile represents an annotation
+pub fn is_annotation(class_file: &ClassFile) -> bool {
+    class_file.access_flags().contains(ClassFlags::ACC_ANNOTATION)
+}
+
 /// Check if classfile represents an enum
 pub fn is_enum(class_file: &ClassFile) -> bool {
     class_file.access_flags().contains(ClassFlags::ACC_ENUM)
@@ -261,23 +266,25 @@ pub fn is_record(class_file: &ClassFile) -> bool {
 
 /// Convert a ClassFile to a Mermaid Class with all members
 pub fn classfile_to_mermaid_class<'a>(
-    class_file: &ClassFile,
+    class_file: &'a ClassFile,
     class_name: &str,
     skip_annotation: Option<&str>,
+    relationship_annotations: &[Option<&str>],
 ) -> Class<'a> {
     let constant_pool = class_file.constant_pool();
 
-    // Build annotations list
-    let mut annotations = Vec::new();
-    if is_interface(class_file) {
-        annotations.push("interface".to_string().into());
+    // Determine class annotation
+    let annotation = if is_interface(class_file) {
+        Some("interface".into())
     } else if is_enum(class_file) {
-        annotations.push("enum".to_string().into());
-    } else if is_record(class_file) {
-        annotations.push("record".to_string().into());
+        Some("enumeration".into())
     } else if is_abstract(class_file) {
-        annotations.push("abstract".to_string().into());
-    }
+        Some("abstract".into())
+    } else {
+        None
+    };
+
+    let is_enum_class = is_enum(class_file);
 
     // Extract fields
     let mut members = Vec::new();
@@ -287,19 +294,48 @@ pub fn classfile_to_mermaid_class<'a>(
             continue;
         }
 
+        // Skip if field has any relationship annotation
+        let has_relationship_annotation = relationship_annotations.iter().any(|rel_ann| {
+            has_annotation(constant_pool, field.attributes(), *rel_ann)
+        });
+        if has_relationship_annotation {
+            continue;
+        }
+
         let name = get_utf8(constant_pool, field.name_index())
-            .unwrap_or("unknown")
-            .to_string();
+            .unwrap_or("unknown");
         let descriptor = get_utf8(constant_pool, field.descriptor_index())
             .unwrap_or("");
         let data_type = parse_field_descriptor(descriptor);
 
+        // Strip $ from field names (synthetic fields added by compiler)
+        let clean_name = name.trim_matches('$');
+
+        // Check if this is an enum constant (field type matches class name)
+        let is_enum_constant = is_enum_class && data_type == class_name;
+
         members.push(Member::Attribute(MermaidAttribute {
-            visibility: field_visibility(field.access_flags()),
-            name: name.into(),
-            data_type: Some(data_type.into()),
-            is_static: field.access_flags().contains(FieldFlags::ACC_STATIC),
-            type_notation: TypeNotation::Postfix,
+            visibility: if is_enum_constant {
+                Visibility::Unspecified
+            } else {
+                field_visibility(field.access_flags())
+            },
+            name: clean_name.into(),
+            data_type: if is_enum_constant {
+                None
+            } else {
+                Some(data_type.into())
+            },
+            is_static: if is_enum_constant {
+                false
+            } else {
+                field.access_flags().contains(FieldFlags::ACC_STATIC)
+            },
+            type_notation: if is_enum_constant {
+                TypeNotation::None
+            } else {
+                TypeNotation::Postfix
+            },
         }));
     }
 
@@ -311,8 +347,7 @@ pub fn classfile_to_mermaid_class<'a>(
         }
 
         let name = get_utf8(constant_pool, method.name_index())
-            .unwrap_or("unknown")
-            .to_string();
+            .unwrap_or("unknown");
 
         // Skip constructors, static initializers, and lambda methods
         if name == "<init>" || name == "<clinit>" || name.starts_with("lambda$") {
@@ -334,9 +369,12 @@ pub fn classfile_to_mermaid_class<'a>(
             })
             .collect();
 
+        // Strip $ from method names (synthetic methods added by compiler)
+        let clean_name = name.trim_matches('$');
+
         members.push(Member::Method(Method {
             visibility: method_visibility(method.access_flags()),
-            name: name.into(),
+            name: clean_name.into(),
             parameters,
             return_type: Some(return_type.into()),
             is_static: method.access_flags().contains(MethodFlags::ACC_STATIC),
@@ -347,7 +385,7 @@ pub fn classfile_to_mermaid_class<'a>(
 
     Class {
         name: class_name.to_string().into(),
-        annotations,
+        annotation,
         members,
     }
 }

@@ -27,8 +27,8 @@ pub fn extract_class_name_from_descriptor(descriptor: &str) -> Option<String> {
     if trimmed.starts_with('L') && trimmed.ends_with(';') && !trimmed.starts_with('[') {
         let class_path = &trimmed[1..trimmed.len() - 1]; // Remove L and ;
         let simple_name = class_path.rsplit('/').next().unwrap_or(class_path);
-        // Replace $ with _ for inner classes (Mermaid treats $ as special)
-        Some(simple_name.replace('$', "_"))
+        // Replace $ with . for inner classes
+        Some(simple_name.replace('$', "."))
     } else {
         None
     }
@@ -100,8 +100,8 @@ fn parse_type_internal(descriptor: &str, start: usize) -> (String, usize) {
             let end = descriptor[idx..].find(';').unwrap_or(descriptor.len() - idx);
             let class_path = &descriptor[idx + 1..idx + end];
             let simple_name = class_path.rsplit('/').next().unwrap_or(class_path);
-            // Replace $ with _ for inner classes (Mermaid treats $ as special)
-            (simple_name.replace('$', "_"), end + 1)
+            // Replace $ with . for inner classes
+            (simple_name.replace('$', "."), end + 1)
         }
         _ => ("Object".to_string(), 1),
     };

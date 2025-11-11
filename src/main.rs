@@ -3,7 +3,7 @@ mod descriptor;
 
 use anyhow::anyhow;
 use clap::Parser;
-use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
+use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name, is_annotation};
 use descriptor::extract_class_name_from_descriptor;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::serializer::serialize_diagram;
@@ -105,7 +105,7 @@ fn load_classfiles(
                     return Ok(());
                 }
                 // PERF: This is wasteful. We could do better.
-                filestem = filestem.replace('$', "_");
+                filestem = filestem.replace('$', ".");
             }
 
             match load_classfile(include_path) {
@@ -283,6 +283,11 @@ fn main() {
 
     // Process all classfiles and add them to the diagram unless they have the skip annotation
     for (class_name, classfile) in &classfiles {
+        // Skip annotation type definitions
+        if is_annotation(classfile) {
+            continue;
+        }
+
         // Check if the class itself has the skip annotation
         if classfile_utils::has_annotation(
             classfile.constant_pool(),
@@ -293,7 +298,18 @@ fn main() {
         }
 
         // Convert classfile to Mermaid class
-        let mermaid_class = classfile_to_mermaid_class(classfile, class_name, skip_annotation);
+        let relationship_annotations = [
+            aggregate_annotation,
+            compose_annotation,
+            link_annotation,
+            navigate_annotation,
+        ];
+        let mermaid_class = classfile_to_mermaid_class(
+            classfile,
+            class_name,
+            skip_annotation,
+            &relationship_annotations,
+        );
 
         // Determine the namespace for this class
         let namespace_name = if group_by_package {
