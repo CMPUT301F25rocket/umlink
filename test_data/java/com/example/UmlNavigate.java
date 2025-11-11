@@ -6,5 +6,9 @@ import java.lang.annotation.ElementType;
 import java.lang.annotation.Target;
 
 @Retention(RetentionPolicy.CLASS)
-public @interface Skip {
+@Target(ElementType.FIELD)
+public @interface UmlNavigate {
+    String selfCard() default "1";
+    String label() default "";
+    String otherCard() default "1";
 }

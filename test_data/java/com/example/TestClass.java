@@ -6,6 +6,7 @@ public class TestClass {
     @Skip
     private String hiddenField;
 
+    @UmlCompose(selfCard = "1", label = "Owns", otherCard = "1")
     private int anotherVisibleField;
 
     public void visibleMethod() {

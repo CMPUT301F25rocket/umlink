@@ -1,17 +1,17 @@
-mod descriptor;
 mod classfile_utils;
+mod descriptor;
 
 use anyhow::anyhow;
 use clap::Parser;
+use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
 use jclassfile::class_file::{self, ClassFile};
-use mermaid_parser::types::Diagram;
 use mermaid_parser::serializer::serialize_diagram;
+use mermaid_parser::types::Diagram;
 use std::{
     collections::{BTreeMap, HashSet},
     fs,
     path::{Path, PathBuf},
 };
-use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
 
 /// This program will take in a list of mermaid files which need "linking"
 /// according to some list of targets.
@@ -164,10 +164,7 @@ fn find_common_base_package(packages: &[&str]) -> String {
     }
 
     // Split all packages into components
-    let split_packages: Vec<Vec<&str>> = packages
-        .iter()
-        .map(|p| p.split('/').collect())
-        .collect();
+    let split_packages: Vec<Vec<&str>> = packages.iter().map(|p| p.split('/').collect()).collect();
 
     if split_packages.is_empty() {
         return String::new();
@@ -302,11 +299,8 @@ fn main() {
                 }
 
                 // Convert classfile to Mermaid class
-                let mut mermaid_class = classfile_to_mermaid_class(
-                    classfile,
-                    &class_name,
-                    skip_annotation,
-                );
+                let mut mermaid_class =
+                    classfile_to_mermaid_class(classfile, &class_name, skip_annotation);
 
                 // Determine the namespace for this class
                 let namespace_name = if group_by_package {
@@ -324,15 +318,15 @@ fn main() {
                 mermaid_class.namespace = namespace_name.clone();
 
                 // Add the class to the appropriate namespace
-                let namespace = diagram
-                    .namespaces
-                    .entry(namespace_name)
-                    .or_default();
+                let namespace = diagram.namespaces.entry(namespace_name).or_default();
 
                 namespace.classes.insert(class_name.clone(), mermaid_class);
             } else {
                 // Class not found in classfiles - keep the stub if it exists
-                eprintln!("WARN: Class '{}' referenced in diagram but not found in classfiles", class_name);
+                eprintln!(
+                    "WARN: Class '{}' referenced in diagram but not found in classfiles",
+                    class_name
+                );
             }
         }
 
@@ -347,10 +341,49 @@ fn main() {
 
         // Write to file
         if let Err(why) = fs::write(&output_path, output_text) {
-            eprintln!("ERROR: Failed to write output file {}: {}", output_path.display(), why);
+            eprintln!(
+                "ERROR: Failed to write output file {}: {}",
+                output_path.display(),
+                why
+            );
             std::process::exit(FAILED_TO_WRITE_OUTPUT);
         }
 
-        println!("Successfully wrote linked diagram to {}", output_path.display());
+        println!(
+            "Successfully wrote linked diagram to {}",
+            output_path.display()
+        );
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use crate::find_common_base_package;
+
+    #[test]
+    fn test_find_common_base_package() {
+        let prefix = find_common_base_package(&[
+            "com/MainActivity",
+            "com/example/example/Helper",
+            "com/example/Second",
+        ]);
+
+        assert_eq!("com", prefix);
+
+        let prefix = find_common_base_package(&[
+            "com/example/example/Helper",
+            "com/example/Second",
+            "com/example/Third",
+        ]);
+
+        assert_eq!("com/example", prefix);
+
+        let prefix = find_common_base_package(&[
+            "other/example/example/Helper",
+            "com/example/Second",
+            "com/example/Third",
+        ]);
+
+        assert_eq!("", prefix);
     }
 }
