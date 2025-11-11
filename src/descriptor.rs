@@ -13,6 +13,27 @@ pub fn parse_field_descriptor(descriptor: &str) -> String {
     parse_type_internal(descriptor, 0).0
 }
 
+/// Extract the class name from a field descriptor if it's an object type
+/// Returns None for primitive types and arrays
+/// Examples:
+/// - "Ljava/lang/String;" -> Some("String")
+/// - "Lcom/example/MyClass;" -> Some("MyClass")
+/// - "I" -> None (primitive)
+/// - "[Ljava/lang/String;" -> None (array)
+pub fn extract_class_name_from_descriptor(descriptor: &str) -> Option<String> {
+    let trimmed = descriptor.trim();
+
+    // Check if it's an object type (starts with L, ends with ;, and no arrays)
+    if trimmed.starts_with('L') && trimmed.ends_with(';') && !trimmed.starts_with('[') {
+        let class_path = &trimmed[1..trimmed.len() - 1]; // Remove L and ;
+        let simple_name = class_path.rsplit('/').next().unwrap_or(class_path);
+        // Replace $ with _ for inner classes (Mermaid treats $ as special)
+        Some(simple_name.replace('$', "_"))
+    } else {
+        None
+    }
+}
+
 /// Parse a method descriptor into (parameters, return_type)
 /// Example: "(ILjava/lang/String;)V" -> (vec!["int", "String"], "void")
 pub fn parse_method_descriptor(descriptor: &str) -> (Vec<String>, String) {

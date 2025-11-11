@@ -121,6 +121,86 @@ fn get_annotation_type(constant_pool: &[ConstantPool], type_index: u16) -> Optio
     get_utf8(constant_pool, type_index).map(|s| s.to_string())
 }
 
+/// Get annotation parameter value as string from ElementValue
+fn get_element_value_as_string(constant_pool: &[ConstantPool], element_value: &jclassfile::attributes::ElementValue) -> Option<String> {
+    use jclassfile::attributes::ElementValue;
+    match element_value {
+        ElementValue::ConstValueIndex { const_value_index, .. } => {
+            // The const_value_index points to a constant pool entry
+            // For strings, integers, etc.
+            if let Some(cp_entry) = constant_pool.get(*const_value_index as usize) {
+                match cp_entry {
+                    ConstantPool::Utf8 { value } => Some(value.to_string()),
+                    ConstantPool::Integer { value } => Some(value.to_string()),
+                    ConstantPool::Float { value } => Some(value.to_string()),
+                    ConstantPool::Long { value } => Some(value.to_string()),
+                    ConstantPool::Double { value } => Some(value.to_string()),
+                    ConstantPool::String { string_index } => {
+                        get_utf8(constant_pool, *string_index).map(|s| s.to_string())
+                    }
+                    _ => None,
+                }
+            } else {
+                None
+            }
+        }
+        _ => None,
+    }
+}
+
+/// Extract annotation parameters from a field
+/// Returns (selfCard, label, otherCard) if the annotation is found
+pub fn get_annotation_params(
+    constant_pool: &[ConstantPool],
+    attributes: &[Attribute],
+    target_annotation: Option<&str>,
+) -> Option<(String, String, String)> {
+    let Some(target_name) = target_annotation else {
+        return None;
+    };
+
+    for attr in attributes {
+        let annotations = match attr {
+            Attribute::RuntimeVisibleAnnotations { annotations, .. } => annotations,
+            Attribute::RuntimeInvisibleAnnotations { annotations } => annotations,
+            _ => continue,
+        };
+
+        for annotation in annotations {
+            if let Some(type_name) = get_annotation_type(constant_pool, annotation.type_index()) {
+                let type_name_clean = type_name
+                    .trim_start_matches('L')
+                    .trim_end_matches(';')
+                    .replace('/', ".");
+
+                if type_name_clean == target_name {
+                    // Found the target annotation, extract parameters
+                    let mut self_card = "1".to_string();
+                    let mut label = String::new();
+                    let mut other_card = "1".to_string();
+
+                    for pair in annotation.element_value_pairs() {
+                        if let Some(param_name) = get_utf8(constant_pool, pair.element_name_index()) {
+                            if let Some(value) = get_element_value_as_string(constant_pool, pair.value()) {
+                                match param_name {
+                                    "selfCard" => self_card = value,
+                                    "label" => label = value,
+                                    "otherCard" => other_card = value,
+                                    _ => {}
+                                }
+                            }
+                        }
+                    }
+
+                    return Some((self_card, label, other_card));
+                }
+            }
+        }
+    }
+
+    None
+}
+
 /// Extract parameter names from method attributes (if available)
 /// Falls back to "arg0", "arg1", etc. if names are not present
 pub fn extract_parameter_names(
@@ -180,23 +260,23 @@ pub fn is_record(class_file: &ClassFile) -> bool {
 }
 
 /// Convert a ClassFile to a Mermaid Class with all members
-pub fn classfile_to_mermaid_class(
+pub fn classfile_to_mermaid_class<'a>(
     class_file: &ClassFile,
     class_name: &str,
     skip_annotation: Option<&str>,
-) -> Class {
+) -> Class<'a> {
     let constant_pool = class_file.constant_pool();
 
     // Build annotations list
     let mut annotations = Vec::new();
     if is_interface(class_file) {
-        annotations.push("interface".to_string());
+        annotations.push("interface".to_string().into());
     } else if is_enum(class_file) {
-        annotations.push("enum".to_string());
+        annotations.push("enum".to_string().into());
     } else if is_record(class_file) {
-        annotations.push("record".to_string());
+        annotations.push("record".to_string().into());
     } else if is_abstract(class_file) {
-        annotations.push("abstract".to_string());
+        annotations.push("abstract".to_string().into());
     }
 
     // Extract fields
@@ -216,8 +296,8 @@ pub fn classfile_to_mermaid_class(
 
         members.push(Member::Attribute(MermaidAttribute {
             visibility: field_visibility(field.access_flags()),
-            name,
-            data_type: Some(data_type),
+            name: name.into(),
+            data_type: Some(data_type.into()),
             is_static: field.access_flags().contains(FieldFlags::ACC_STATIC),
             type_notation: TypeNotation::Postfix,
         }));
@@ -248,17 +328,17 @@ pub fn classfile_to_mermaid_class(
             .into_iter()
             .zip(param_types.into_iter())
             .map(|(name, data_type)| Parameter {
-                name,
-                data_type: Some(data_type),
+                name: name.into(),
+                data_type: Some(data_type.into()),
                 type_notation: TypeNotation::Postfix,
             })
             .collect();
 
         members.push(Member::Method(Method {
             visibility: method_visibility(method.access_flags()),
-            name,
+            name: name.into(),
             parameters,
-            return_type: Some(return_type),
+            return_type: Some(return_type.into()),
             is_static: method.access_flags().contains(MethodFlags::ACC_STATIC),
             is_abstract: method.access_flags().contains(MethodFlags::ACC_ABSTRACT),
             return_type_notation: TypeNotation::Postfix,
@@ -266,10 +346,8 @@ pub fn classfile_to_mermaid_class(
     }
 
     Class {
-        name: class_name.to_string(),
-        generic: None,
+        name: class_name.to_string().into(),
         annotations,
         members,
-        namespace: mermaid_parser::types::DEFAULT_NAMESPACE.to_string(),
     }
 }

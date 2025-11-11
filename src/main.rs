@@ -4,9 +4,10 @@ mod descriptor;
 use anyhow::anyhow;
 use clap::Parser;
 use classfile_utils::{classfile_to_mermaid_class, get_full_class_name, get_package_name};
+use descriptor::extract_class_name_from_descriptor;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::serializer::serialize_diagram;
-use mermaid_parser::types::Diagram;
+use mermaid_parser::types::{Diagram, RelationKind};
 use std::{
     collections::BTreeMap,
     fs,
@@ -141,14 +142,12 @@ enum LoadMermaidError {
     #[error("{0}")]
     Io(std::io::Error),
     #[error("{0}")]
-    Parse(mermaid_parser::parser::ParseError),
+    Parse(mermaid_parser::parserv2::MermaidParseError),
 }
 
-fn load_mermaid(path: &Path) -> Result<mermaid_parser::types::Diagram, LoadMermaidError> {
-    let link_content = fs::read_to_string(path)?;
-    Ok(mermaid_parser::parser::parse(&link_content)?)
+fn load_mermaid(path: &Path) -> Result<String, LoadMermaidError> {
+    Ok(fs::read_to_string(path)?)
 }
-
 
 /// Find the common base package among all classes
 /// Returns the common prefix package path (e.g., "com/example")
@@ -227,8 +226,20 @@ fn main() {
         }
     }
 
-    let mut diagram = if let Some(diagram_path) = &args.diagram {
+    let diagram_source = if let Some(diagram_path) = &args.diagram {
         match load_mermaid(&diagram_path) {
+            Ok(content) => content,
+            Err(why) => {
+                eprintln!("ERROR: {}", why);
+                std::process::exit(FAILED_TO_LOAD_DIAGRAM);
+            }
+        }
+    } else {
+        String::new()
+    };
+
+    let mut diagram = if !diagram_source.is_empty() {
+        match mermaid_parser::parserv2::parse_mermaid(&diagram_source) {
             Ok(diagram) => diagram,
             Err(why) => {
                 eprintln!("ERROR: {}", why);
@@ -282,8 +293,7 @@ fn main() {
         }
 
         // Convert classfile to Mermaid class
-        let mut mermaid_class =
-            classfile_to_mermaid_class(classfile, class_name, skip_annotation);
+        let mermaid_class = classfile_to_mermaid_class(classfile, class_name, skip_annotation);
 
         // Determine the namespace for this class
         let namespace_name = if group_by_package {
@@ -297,13 +307,64 @@ fn main() {
             mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
         };
 
-        // Update the class's namespace field
-        mermaid_class.namespace = namespace_name.clone();
-
         // Add the class to the appropriate namespace
-        let namespace = diagram.namespaces.entry(namespace_name).or_default();
+        let namespace = diagram.namespaces.entry(namespace_name.into()).or_default();
 
-        namespace.classes.insert(class_name.clone(), mermaid_class);
+        namespace
+            .classes
+            .insert(class_name.clone().into(), mermaid_class);
+
+        // Process fields to find relationship annotations
+        let constant_pool = classfile.constant_pool();
+        for field in classfile.fields() {
+            let field_descriptor =
+                classfile_utils::get_utf8(constant_pool, field.descriptor_index()).unwrap_or("");
+
+            // Extract the target class from the field descriptor (if it's an object type)
+            if let Some(target_class) = extract_class_name_from_descriptor(field_descriptor) {
+                // Check for each relationship annotation type
+                let annotations = [
+                    (aggregate_annotation, RelationKind::Aggregation),
+                    (compose_annotation, RelationKind::Composition),
+                    (link_annotation, RelationKind::Association),
+                    (navigate_annotation, RelationKind::Association),
+                ];
+
+                for (annotation_name, relation_kind) in &annotations {
+                    if let Some((self_card, label, other_card)) =
+                        classfile_utils::get_annotation_params(
+                            constant_pool,
+                            field.attributes(),
+                            *annotation_name,
+                        )
+                    {
+                        // Create a relationship from the current class to the field's type
+                        let relation = mermaid_parser::types::Relation {
+                            tail: class_name.clone().into(),
+                            head: target_class.clone().into(),
+                            kind: *relation_kind,
+                            cardinality_tail: if self_card.is_empty() {
+                                None
+                            } else {
+                                Some(self_card.into())
+                            },
+                            cardinality_head: if other_card.is_empty() {
+                                None
+                            } else {
+                                Some(other_card.into())
+                            },
+                            label: if label.is_empty() {
+                                None
+                            } else {
+                                Some(label.into())
+                            },
+                        };
+                        diagram.relations.push(relation);
+                        break; // Only create one relation per field (first matching annotation)
+                    }
+                }
+            }
+        }
     }
 
     // Serialize the diagram to Mermaid text
@@ -318,7 +379,8 @@ fn main() {
                 .diagram
                 .as_ref()
                 .map(|path| path.file_name().unwrap_or_else(default_name));
-            args.output.join(output_filename.unwrap_or_else(default_name))
+            args.output
+                .join(output_filename.unwrap_or_else(default_name))
         } else {
             // Output path exists and is a file - abort to avoid overwriting
             eprintln!(
