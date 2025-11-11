@@ -8,7 +8,7 @@ use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::serializer::serialize_diagram;
 use mermaid_parser::types::Diagram;
 use std::{
-    collections::{BTreeMap, HashSet},
+    collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
@@ -149,25 +149,6 @@ fn load_mermaid(path: &Path) -> Result<mermaid_parser::types::Diagram, LoadMerma
     Ok(mermaid_parser::parser::parse(&link_content)?)
 }
 
-/// Collect all class names referenced in the diagram (from stubs and relations)
-fn collect_referenced_classes(diagram: &Diagram) -> HashSet<String> {
-    let mut referenced = HashSet::new();
-
-    // Add all classes defined in the diagram
-    for (_namespace_name, namespace) in &diagram.namespaces {
-        for (class_name, _class) in &namespace.classes {
-            referenced.insert(class_name.clone());
-        }
-    }
-
-    // Add all classes referenced in relations
-    for relation in &diagram.relations {
-        referenced.insert(relation.from.clone());
-        referenced.insert(relation.to.clone());
-    }
-
-    referenced
-}
 
 /// Find the common base package among all classes
 /// Returns the common prefix package path (e.g., "com/example")
@@ -272,21 +253,13 @@ fn main() {
     let link_annotation = args.link.as_deref();
     let navigate_annotation = args.navigate.as_deref();
 
-    // Collect all class names that need to be in the diagram
-    let referenced_classes = collect_referenced_classes(&diagram);
-
-    // Clear existing classes from namespaces (keep only relations and YAML)
-    // We'll repopulate with full class details from classfiles
-    diagram.namespaces.clear();
-
     // Determine if we should group by package
     let group_by_package = should_group_by_package(&diagram);
 
     // If grouping by package, find the common base package
     let base_package = if group_by_package {
-        let full_names: Vec<String> = referenced_classes
-            .iter()
-            .filter_map(|class_name| classfiles.get(class_name))
+        let full_names: Vec<String> = classfiles
+            .values()
             .filter_map(|classfile| get_full_class_name(classfile))
             .collect();
 
@@ -301,78 +274,73 @@ fn main() {
         String::new()
     };
 
-    // For each referenced class, populate it from the classfile if available
-    for class_name in referenced_classes {
-        // Try to find the corresponding classfile
-        if let Some(classfile) = classfiles.get(&class_name) {
-            // Check if the class itself has the skip annotation
-            if classfile_utils::has_annotation(
-                classfile.constant_pool(),
-                classfile.attributes(),
-                skip_annotation,
-            ) {
-                continue; // Skip this entire class
-            }
+    // Clear existing classes from namespaces (keep only relations and YAML)
+    // We'll repopulate with full class details from classfiles
+    diagram.namespaces.clear();
 
-            // Convert classfile to Mermaid class
-            let mut mermaid_class =
-                classfile_to_mermaid_class(classfile, &class_name, skip_annotation);
+    // Process all classfiles and add them to the diagram unless they have the skip annotation
+    for (class_name, classfile) in &classfiles {
+        // Check if the class itself has the skip annotation
+        if classfile_utils::has_annotation(
+            classfile.constant_pool(),
+            classfile.attributes(),
+            skip_annotation,
+        ) {
+            continue; // Skip this entire class
+        }
 
-            // Determine the namespace for this class
-            let namespace_name = if group_by_package {
-                if let Some(full_class_name) = get_full_class_name(classfile) {
-                    let package = get_package_name(&full_class_name);
-                    get_relative_namespace(&base_package, package)
-                } else {
-                    mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
-                }
+        // Convert classfile to Mermaid class
+        let mut mermaid_class =
+            classfile_to_mermaid_class(classfile, class_name, skip_annotation);
+
+        // Determine the namespace for this class
+        let namespace_name = if group_by_package {
+            if let Some(full_class_name) = get_full_class_name(classfile) {
+                let package = get_package_name(&full_class_name);
+                get_relative_namespace(&base_package, package)
             } else {
                 mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
-            };
-
-            // Update the class's namespace field
-            mermaid_class.namespace = namespace_name.clone();
-
-            // Add the class to the appropriate namespace
-            let namespace = diagram.namespaces.entry(namespace_name).or_default();
-
-            namespace.classes.insert(class_name.clone(), mermaid_class);
+            }
         } else {
-            // Class not found in classfiles - keep the stub if it exists
-            eprintln!(
-                "WARN: Class '{}' referenced in diagram but not found in classfiles",
-                class_name
-            );
-        }
+            mermaid_parser::types::DEFAULT_NAMESPACE.to_string()
+        };
 
-        // Serialize the diagram to Mermaid text
-        let output_text = serialize_diagram(&diagram);
+        // Update the class's namespace field
+        mermaid_class.namespace = namespace_name.clone();
 
-        // Determine output file path
-        let default_name = || std::ffi::OsStr::new("output.mmd");
-        let output_filename = args
-            .diagram
-            .as_ref()
-            .map(|path| path.file_name().unwrap_or_else(default_name));
-        let output_path = args
-            .output
-            .join(output_filename.unwrap_or_else(default_name));
+        // Add the class to the appropriate namespace
+        let namespace = diagram.namespaces.entry(namespace_name).or_default();
 
-        // Write to file
-        if let Err(why) = fs::write(&output_path, output_text) {
-            eprintln!(
-                "ERROR: Failed to write output file {}: {}",
-                output_path.display(),
-                why
-            );
-            std::process::exit(FAILED_TO_WRITE_OUTPUT);
-        }
-
-        println!(
-            "Successfully wrote linked diagram to {}",
-            output_path.display()
-        );
+        namespace.classes.insert(class_name.clone(), mermaid_class);
     }
+
+    // Serialize the diagram to Mermaid text
+    let output_text = serialize_diagram(&diagram);
+
+    // Determine output file path
+    let default_name = || std::ffi::OsStr::new("output.mmd");
+    let output_filename = args
+        .diagram
+        .as_ref()
+        .map(|path| path.file_name().unwrap_or_else(default_name));
+    let output_path = args
+        .output
+        .join(output_filename.unwrap_or_else(default_name));
+
+    // Write to file
+    if let Err(why) = fs::write(&output_path, output_text) {
+        eprintln!(
+            "ERROR: Failed to write output file {}: {}",
+            output_path.display(),
+            why
+        );
+        std::process::exit(FAILED_TO_WRITE_OUTPUT);
+    }
+
+    println!(
+        "Successfully wrote linked diagram to {}",
+        output_path.display()
+    );
 }
 
 #[cfg(test)]
