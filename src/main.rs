@@ -148,10 +148,6 @@ enum LoadMermaidError {
     Parse(mermaid_parser::parserv2::MermaidParseError),
 }
 
-fn load_mermaid(path: &Path) -> Result<String, LoadMermaidError> {
-    Ok(fs::read_to_string(path)?)
-}
-
 /// Find the common base package among all classes
 /// Returns the common prefix package path (e.g., "com/example")
 fn find_common_base_package(packages: &[&str]) -> String {
@@ -217,6 +213,80 @@ fn should_group_by_package(diagram: &Diagram) -> bool {
     false
 }
 
+/// Check if a classfile should be included based on the select filters in the YAML frontmatter
+/// Returns true if the classfile should be included, false otherwise.
+///
+/// Behavior:
+/// - If no "select" directive is present, include all classfiles (return true)
+/// - If "select" is present but has no filters, include no classfiles (return false)
+/// - If "select" has filters, include classfile if it matches ANY filter (return true)
+fn should_include_classfile(diagram: &Diagram, classfile: &ClassFile) -> bool {
+    let Some(yaml) = &diagram.yaml else {
+        return true; // No YAML, include all
+    };
+
+    let Some(umlink) = yaml.get("umlink") else {
+        return true; // No umlink section, include all
+    };
+
+    let Some(select) = umlink.get("select") else {
+        return true; // No select directive, include all
+    };
+
+    // select directive is present
+    let Some(filters) = select.as_sequence() else {
+        // select is present but not a sequence (invalid format), include nothing
+        return false;
+    };
+
+    // If filters array is empty, include nothing
+    if filters.is_empty() {
+        return false;
+    }
+
+    // Get the package name of this classfile
+    let package = if let Some(full_name) = get_full_class_name(classfile) {
+        get_package_name(&full_name).replace('/', ".")
+    } else {
+        String::new() // Default package
+    };
+
+    // Check if any filter matches
+    for filter in filters {
+        let Some(filter_map) = filter.as_mapping() else {
+            continue;
+        };
+
+        let Some(field) = filter_map.get("field") else {
+            continue;
+        };
+
+        let Some(field_str) = field.as_str() else {
+            continue;
+        };
+
+        if field_str != "package" {
+            continue; // Only "package" field is supported for now
+        }
+
+        let Some(pattern) = filter_map.get("pattern") else {
+            continue;
+        };
+
+        let Some(pattern_str) = pattern.as_str() else {
+            continue;
+        };
+
+        // Match the package against the pattern
+        if package == pattern_str {
+            return true; // Found a matching filter
+        }
+    }
+
+    // No filters matched
+    false
+}
+
 fn main() {
     let args = Args::parse();
 
@@ -230,7 +300,7 @@ fn main() {
     }
 
     let diagram_source = if let Some(diagram_path) = &args.diagram {
-        match load_mermaid(&diagram_path) {
+        match fs::read_to_string(&diagram_path) {
             Ok(content) => content,
             Err(why) => {
                 eprintln!("ERROR: {}", why);
@@ -243,7 +313,7 @@ fn main() {
 
     let mut diagram = if !diagram_source.is_empty() {
         match mermaid_parser::parserv2::parse_mermaid(&diagram_source) {
-            Ok(diagram) => diagram,
+            Ok(diagram) => diagram.1,
             Err(why) => {
                 eprintln!("ERROR: {}", why);
                 std::process::exit(FAILED_TO_LOAD_DIAGRAM);
@@ -288,6 +358,11 @@ fn main() {
     for (class_name, classfile) in &classfiles {
         // Skip annotation type definitions
         if is_annotation(classfile) {
+            continue;
+        }
+
+        // Check if this classfile should be included based on select filters
+        if !should_include_classfile(&diagram, classfile) {
             continue;
         }
 

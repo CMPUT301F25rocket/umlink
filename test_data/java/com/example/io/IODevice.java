@@ -1,4 +1,6 @@
-package com.example;
+package com.example.io;
+
+import com.example.UmlSkip;
 
 public abstract class IODevice {
     public abstract Integer getMajorNumber();

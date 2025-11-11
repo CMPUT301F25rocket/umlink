@@ -1,4 +1,4 @@
-package com.example;
+package com.example.io;
 
 public class Mouse extends IODevice implements IODevice.Character {
     @Override 

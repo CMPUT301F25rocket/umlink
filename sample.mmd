@@ -1,62 +1,5 @@
 classDiagram
-class TestClassRetention {
-  -visibleField: String
-  -hiddenFieldWithClassRetention: String
-  +visibleMethod() void
-  +hiddenMethodWithClassRetention() void
-}
-class UmlCompose {
-  +selfCard()* String
-  +label()* String
-  +otherCard()* String
-}
-class IODevice.Network.State {
-  +UP: IODevice.Network.State$
-  +DOWN: IODevice.Network.State$
-  -$VALUES: IODevice.Network.State[]$
-  +values()$ IODevice.Network.State[]
-  +valueOf(arg0: String)$ IODevice.Network.State
-  -$values()$ IODevice.Network.State[]
-}
-class UmlSkip
-class UmlNavigate {
-  +selfCard()* String
-  +label()* String
-  +otherCard()* String
-}
-class Mouse {
-  +getMajorNumber() Integer
-  +getMinorNumber() Integer
-  +getBufferSize() int
-}
-class KeyCode {
-  +A: KeyCode$
-  +B: KeyCode$
-  +C: KeyCode$
-  +D: KeyCode$
-  +E: KeyCode$
-  +F: KeyCode$
-  +G: KeyCode$
-  -$VALUES: KeyCode[]$
-  +values()$ KeyCode[]
-  +valueOf(arg0: String)$ KeyCode
-  +toAscii() int
-  -$values()$ KeyCode[]
-}
-class IODevice {
-  +getMajorNumber()* Integer
-  +getMinorNumber()* Integer
-}
-class Skip
-class IODevice.Character {
-  +getBufferSize()* int
-}
-class SkippedClass {
-  -someField: String
-  +someMethod() void
-}
 class Keyboard {
-  ~keys: List
   +getKeys() List
   +setKeys(arg0: List) void
   +press(arg0: KeyCode) void
@@ -64,52 +7,88 @@ class Keyboard {
   +getMinorNumber() Integer
   +getBufferSize() int
 }
-class IODevice.Block {
-  +getMountPoint()* String
-}
-class SkipClass
-class IODevice.Network {
-  +getMacAddress()* String
-  +getState()* IODevice.Network.State
-}
 class TestClass {
   -visibleField: String
   -hiddenField: String
-  -anotherVisibleField: int
   +visibleMethod() void
   +hiddenMethod() void
   +getVisibleField() String
   +getHiddenField() String
 }
-class UmlAggregate {
-  +selfCard()* String
-  +label()* String
-  +otherCard()* String
+class TestClassRetention {
+  -visibleField: String
+  -hiddenFieldWithClassRetention: String
+  +visibleMethod() void
+  +hiddenMethodWithClassRetention() void
 }
-class UmlAssociate {
-  +selfCard()* String
-  +label()* String
-  +otherCard()* String
+class IODevice.Network {
+  +getMacAddress()* String
+  +getState()* IODevice.Network.State
 }
+<<interface>> IODevice.Network
+class Computer.State {
+  ON
+  OFF
+  SLEEP
+  -VALUES: Computer.State[]$
+  +values()$ Computer.State[]
+  +valueOf(arg0: String)$ Computer.State
+  -values()$ Computer.State[]
+}
+<<enumeration>> Computer.State
+class Mouse {
+  +getMajorNumber() Integer
+  +getMinorNumber() Integer
+  +getBufferSize() int
+}
+class SkippedClass {
+  -someField: String
+  +someMethod() void
+}
+class IODevice.Character {
+  +getBufferSize()* int
+}
+<<interface>> IODevice.Character
+class IODevice.Network.State {
+  UP
+  DOWN
+  -VALUES: IODevice.Network.State[]$
+  +values()$ IODevice.Network.State[]
+  +valueOf(arg0: String)$ IODevice.Network.State
+  -values()$ IODevice.Network.State[]
+}
+<<enumeration>> IODevice.Network.State
+class IODevice {
+  +getMajorNumber()* Integer
+  +getMinorNumber()* Integer
+}
+<<abstract>> IODevice
+class KeyCode {
+  A
+  B
+  C
+  D
+  E
+  F
+  G
+  -VALUES: KeyCode[]$
+  +values()$ KeyCode[]
+  +valueOf(arg0: String)$ KeyCode
+  +toAscii() int
+  -values()$ KeyCode[]
+}
+<<enumeration>> KeyCode
 class Computer {
-  +keyboard: Keyboard
-  +mouse: Mouse
-  -state: Computer.State
   +powerOn() void
   +hibernate() void
   +powerOff() void
   ~modelNumber()$ int
 }
-class Computer.State {
-  +ON: Computer.State$
-  +OFF: Computer.State$
-  +SLEEP: Computer.State$
-  -$VALUES: Computer.State[]$
-  +values()$ Computer.State[]
-  +valueOf(arg0: String)$ Computer.State
-  -$values()$ Computer.State[]
-}
 Computer "1" --o "1" Keyboard
 Computer "1" --o "1" Mouse
 Computer "1" --* "1" Computer.State
 Keyboard "1" --o "0..*" List : contains
+Keyboard --|> IODevice
+Keyboard ..|> IODevice.Character
+Mouse --|> IODevice
+Mouse ..|> IODevice.Character

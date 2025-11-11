@@ -1,0 +1,99 @@
+classDiagram
+class IODevice.Character {
+  +getBufferSize()* int
+}
+<<interface>> IODevice.Character
+class Computer.State {
+  ON
+  OFF
+  SLEEP
+  -VALUES: Computer.State[]$
+  +values()$ Computer.State[]
+  +valueOf(arg0: String)$ Computer.State
+  -values()$ Computer.State[]
+}
+<<enumeration>> Computer.State
+class KeyCode {
+  A
+  B
+  C
+  D
+  E
+  F
+  G
+  -VALUES: KeyCode[]$
+  +values()$ KeyCode[]
+  +valueOf(arg0: String)$ KeyCode
+  +toAscii() int
+  -values()$ KeyCode[]
+}
+<<enumeration>> KeyCode
+class Mouse {
+  +getMajorNumber() Integer
+  +getMinorNumber() Integer
+  +getBufferSize() int
+}
+class SkippedClass {
+  -someField: String
+  +someMethod() void
+}
+class IODevice.Block {
+  +getMountPoint()* String
+}
+<<interface>> IODevice.Block
+class Computer {
+  +keyboard: Keyboard
+  +mouse: Mouse
+  -state: Computer.State
+  +powerOn() void
+  +hibernate() void
+  +powerOff() void
+  ~modelNumber()$ int
+}
+class IODevice.Network {
+  +getMacAddress()* String
+  +getState()* IODevice.Network.State
+}
+<<interface>> IODevice.Network
+class IODevice {
+  +getMajorNumber()* Integer
+  +getMinorNumber()* Integer
+}
+<<abstract>> IODevice
+class TestClass {
+  -visibleField: String
+  -hiddenField: String
+  -anotherVisibleField: int
+  +visibleMethod() void
+  +hiddenMethod() void
+  +getVisibleField() String
+  +getHiddenField() String
+}
+class TestClassRetention {
+  -visibleField: String
+  -hiddenFieldWithClassRetention: String
+  +visibleMethod() void
+  +hiddenMethodWithClassRetention() void
+}
+class Keyboard {
+  ~keys: List
+  +getKeys() List
+  +setKeys(arg0: List) void
+  +press(arg0: KeyCode) void
+  +getMajorNumber() Integer
+  +getMinorNumber() Integer
+  +getBufferSize() int
+}
+class IODevice.Network.State {
+  UP
+  DOWN
+  -VALUES: IODevice.Network.State[]$
+  +values()$ IODevice.Network.State[]
+  +valueOf(arg0: String)$ IODevice.Network.State
+  -values()$ IODevice.Network.State[]
+}
+<<enumeration>> IODevice.Network.State
+Keyboard --|> IODevice
+Keyboard ..|> IODevice.Character
+Mouse --|> IODevice
+Mouse ..|> IODevice.Character

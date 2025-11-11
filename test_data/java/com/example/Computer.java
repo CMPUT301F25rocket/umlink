@@ -1,5 +1,8 @@
 package com.example;
 
+import com.example.io.Keyboard;
+import com.example.io.Mouse;
+
 public class Computer {
     @UmlAggregate
     public Keyboard keyboard;

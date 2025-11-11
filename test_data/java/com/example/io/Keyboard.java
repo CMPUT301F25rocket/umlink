@@ -1,7 +1,8 @@
-package com.example;
+package com.example.io;
 
 import java.util.List;
 import java.util.ArrayList;
+import com.example.UmlAggregate;
 
 public class Keyboard extends IODevice implements IODevice.Character {
     @UmlAggregate(selfCard = "1", label="contains", otherCard="0..*")
