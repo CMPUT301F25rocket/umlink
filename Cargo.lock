@@ -295,8 +295,7 @@ checksum = "f52b00d39961fc5b2736ea853c9cc86238e165017a493d1d5c8eac6bdc4cc273"
 
 [[package]]
 name = "mermaid-parser"
-version = "0.3.0"
-source = "git+https://github.com/GenericConfluent/mermaid-parser.git#e1c90452378df6425a099c6cfa7a7f275167364d"
+version = "0.4.0"
 dependencies = [
  "derive_more",
  "nom",

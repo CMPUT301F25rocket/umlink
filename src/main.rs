@@ -11,11 +11,92 @@ use descriptor::extract_class_name_from_descriptor;
 use jclassfile::class_file::{self, ClassFile};
 use mermaid_parser::serializer::serialize_diagram;
 use mermaid_parser::types::{Diagram, RelationKind};
+use serde::{Deserialize, Serialize};
 use std::{
     collections::BTreeMap,
     fs,
     path::{Path, PathBuf},
 };
+
+/// Configuration that can be loaded from a YAML file
+#[derive(Debug, Clone, Serialize, Deserialize, Default)]
+pub struct Config {
+    /// The fully qualified path of the skip annotation
+    pub skip: Option<String>,
+    /// Fully qualified path to the aggregate annotation
+    pub aggregate: Option<String>,
+    /// Fully qualified path to the compose annotation
+    pub compose: Option<String>,
+    /// Fully qualified path to the link annotation
+    pub link: Option<String>,
+    /// Fully qualified path to the navigate annotation
+    pub navigate: Option<String>,
+}
+
+impl Config {
+    /// Load configuration from a file path
+    fn load_from_file(path: &Path) -> anyhow::Result<Self> {
+        let content = fs::read_to_string(path)?;
+        let config: Config = serde_yml::from_str(&content)?;
+        Ok(config)
+    }
+
+    /// Attempt to load configuration, first from the provided path,
+    /// then from umlink.yml in the current directory if no path is provided
+    fn load(config_path: Option<&Path>) -> Option<Self> {
+        if let Some(path) = config_path {
+            // Explicit config path provided
+            match Self::load_from_file(path) {
+                Ok(config) => {
+                    eprintln!("Loaded configuration from {}", path.display());
+                    return Some(config);
+                }
+                Err(e) => {
+                    eprintln!("WARN: Failed to load config from {}: {}", path.display(), e);
+                    return None;
+                }
+            }
+        }
+
+        // Try to load from umlink.yml in current directory
+        let default_path = PathBuf::from("umlink.yml");
+        if default_path.exists() {
+            match Self::load_from_file(&default_path) {
+                Ok(config) => {
+                    eprintln!("Loaded configuration from umlink.yml");
+                    Some(config)
+                }
+                Err(e) => {
+                    eprintln!("WARN: Failed to load config from umlink.yml: {}", e);
+                    None
+                }
+            }
+        } else {
+            None
+        }
+    }
+
+    /// Merge with command-line arguments, where args take precedence
+    fn merge_with_args(&self, args: &Args) -> MergedConfig {
+        MergedConfig {
+            skip: args.skip.clone().or_else(|| self.skip.clone()),
+            aggregate: args.aggregate.clone().or_else(|| self.aggregate.clone()),
+            compose: args.compose.clone().or_else(|| self.compose.clone()),
+            link: args.link.clone().or_else(|| self.link.clone()),
+            navigate: args.navigate.clone().or_else(|| self.navigate.clone()),
+        }
+    }
+}
+
+/// The merged configuration after combining config file and CLI arguments
+#[derive(Debug, Clone)]
+pub struct MergedConfig {
+    pub skip: Option<String>,
+    pub aggregate: Option<String>,
+    pub compose: Option<String>,
+    pub link: Option<String>,
+    pub navigate: Option<String>,
+}
 
 /// This program will take in a list of mermaid files which need "linking"
 /// according to some list of targets.
@@ -33,6 +114,10 @@ pub struct Args {
     /// will be the same as the input name.
     #[arg(short, long)]
     output: PathBuf,
+    /// Path to the YAML configuration file. If not provided, will look for
+    /// umlink.yml in the current directory.
+    #[arg(long)]
+    config: Option<PathBuf>,
     /// The fully qualified path of the skip annotation to optionally enable
     /// ommiting some types, fields, or methods. (e.g. `com.rocket.radar.Skip`)
     /// Note that this annotation must have a retention policy of RUNTIME
@@ -290,6 +375,10 @@ fn should_include_classfile(diagram: &Diagram, classfile: &ClassFile) -> bool {
 fn main() {
     let args = Args::parse();
 
+    // Load configuration file and merge with CLI arguments
+    let config = Config::load(args.config.as_deref()).unwrap_or_default();
+    let merged_config = config.merge_with_args(&args);
+
     // Load all relevant classfiles and diagrams. We halt if there is an error.
     let mut classfiles = BTreeMap::<String, ClassFile>::new();
     for include_path in &args.classfiles {
@@ -323,11 +412,11 @@ fn main() {
         Diagram::default()
     };
 
-    let skip_annotation = args.skip.as_deref();
-    let aggregate_annotation = args.aggregate.as_deref();
-    let compose_annotation = args.compose.as_deref();
-    let link_annotation = args.link.as_deref();
-    let navigate_annotation = args.navigate.as_deref();
+    let skip_annotation = merged_config.skip.as_deref();
+    let aggregate_annotation = merged_config.aggregate.as_deref();
+    let compose_annotation = merged_config.compose.as_deref();
+    let link_annotation = merged_config.link.as_deref();
+    let navigate_annotation = merged_config.navigate.as_deref();
 
     // Determine if we should group by package
     let group_by_package = should_group_by_package(&diagram);
